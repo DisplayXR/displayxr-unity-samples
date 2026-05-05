@@ -12,6 +12,14 @@ using DisplayXR;
 
 public static class TransparentAutoSetup
 {
+    // Near-mid-gray instead of magenta so silhouette-edge halos blend
+    // invisibly into typical desktop backgrounds. Single source of truth —
+    // both RequestChromaKey (runtime post-weave pass) and the component's
+    // chromaKeyColor field (camera clear + LWA_COLORKEY) read it.
+    // Trade-off: avatar/cube pixels that land exactly on (128,127,129) will
+    // go transparent — keep materials clear of this color.
+    static readonly Color s_ChromaKey = new Color(128f / 255f, 127f / 255f, 129f / 255f, 0f);
+
     // Must run BEFORE the OpenXR session is created — that's when the runtime
     // reads transparentBackgroundEnabled off XrWin32WindowBindingCreateInfoEXT
     // and decides whether to use the BitBlt swapchain path. AfterSceneLoad is
@@ -20,10 +28,8 @@ public static class TransparentAutoSetup
     private static void RequestTransparentSession()
     {
         DisplayXRTransparentOverlay.RequestTransparentSession();
-        // Magenta (1,0,1) — must match the component's clear color so the
-        // runtime's post-weave conversion knows which pixels to alpha-out.
-        DisplayXRTransparentOverlay.RequestChromaKey(new Color(1f, 0f, 1f, 0f));
-        Debug.Log("[TransparentAutoSetup] Requested runtime transparent-background mode + chroma key 0x00FF00FF (magenta).");
+        DisplayXRTransparentOverlay.RequestChromaKey(s_ChromaKey);
+        Debug.Log("[TransparentAutoSetup] Requested runtime transparent-background mode + chroma key 0x00818081 (gray 128,127,129).");
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -57,6 +63,10 @@ public static class TransparentAutoSetup
             var overlay = cam.GetComponent<DisplayXRTransparentOverlay>();
             if (overlay == null)
                 overlay = cam.gameObject.AddComponent<DisplayXRTransparentOverlay>();
+            // The chromaKeyColor property setter re-pushes to camera clear +
+            // native overlay, so this works even after OnEnable already ran
+            // with the magenta default during AddComponent.
+            overlay.chromaKeyColor = s_ChromaKey;
             if (hit != null)
                 overlay.clickableRenderers = hit;
 

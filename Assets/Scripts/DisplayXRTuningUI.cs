@@ -87,8 +87,11 @@ public class DisplayXRTuningUI : MonoBehaviour
     void BuildPanel()
     {
         // ---- root canvas (child of this gameobject so it's tied to scene lifecycle) ----
+        // Build inactive so DisplayXRWindowSpaceUI's OnEnable doesn't fire with
+        // its default 512×256 resolution before we set it. Activate at the end.
         var canvasGO = new GameObject("DisplayXR_Tuning_Canvas",
             typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        canvasGO.SetActive(false);
         canvasGO.transform.SetParent(transform, false);
         canvasGO.layer = LayerMask.NameToLayer("UI");
 
@@ -101,7 +104,9 @@ public class DisplayXRTuningUI : MonoBehaviour
         scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
         scaler.matchWidthOrHeight = 0.5f;
 
-        // Attach DisplayXRWindowSpaceUI — submits Canvas RT as a window-space layer.
+        // Attach DisplayXRWindowSpaceUI and configure BEFORE activation, so
+        // OnEnable creates a kRTWidth × kRTHeight RT (matches CanvasScaler
+        // reference resolution).
         var wsui = canvasGO.AddComponent<DisplayXRWindowSpaceUI>();
         wsui.positionX = panelX;
         wsui.positionY = panelY;
@@ -194,6 +199,11 @@ public class DisplayXRTuningUI : MonoBehaviour
         labelRT.anchorMax = Vector2.one;
         labelRT.offsetMin = Vector2.zero;
         labelRT.offsetMax = Vector2.zero;
+
+        // Activate now → DisplayXRWindowSpaceUI.OnEnable fires with the right
+        // resolution, OverlayCamera spins up, and the RT-→-swapchain copy
+        // path picks up the populated panel hierarchy on the very next frame.
+        canvasGO.SetActive(true);
 
         // Try to enumerate modes now; if the standalone session isn't ready
         // yet, retry from Update().

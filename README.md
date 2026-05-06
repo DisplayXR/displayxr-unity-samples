@@ -16,17 +16,35 @@ A minimal Unity test project for the [DisplayXR Unity plugin](https://github.com
    ```
 2. Open the project in Unity Hub (`File → Open Project`)
 3. Unity will fetch dependencies — this may take a few minutes on first open
-4. Open `Assets/CubeTest.unity` to load the test scene
+
+### One-time URP setup
+
+The project ships with the Universal Render Pipeline package in its manifest but
+without a pre-configured pipeline asset (Unity 6's pipeline asset format keeps
+moving and hand-authored assets break across patch versions). Once on first open
+of the project, run the converter:
+
+1. `Window → Rendering → Render Pipeline Converter`
+2. In the dropdown choose **Built-in to URP**
+3. Tick *Convert Project Settings* and *Material and Material Reference Upgrade*
+4. Click **Initialize Converters** then **Convert Assets**
+
+This creates `Assets/Settings/URP-*Pipeline.asset` and points
+`Project Settings → Graphics` and `Project Settings → Quality` at it. The cube's
+wood-crate material is upgraded to `Universal Render Pipeline/Lit`. After this
+you don't need to do it again.
+
+4. Open `Assets/CubeTest.unity` to load the test scene.
 
 ## Plugin Reference
 
 The project depends on the DisplayXR Unity plugin via Unity Package Manager. The dependency is declared in `Packages/manifest.json`:
 
 ```json
-"com.displayxr.unity": "https://github.com/DisplayXR/displayxr-unity.git#upm/v1.0.0"
+"com.displayxr.unity": "https://github.com/DisplayXR/displayxr-unity.git#upm/v1.2.7"
 ```
 
-To test against a different plugin version, edit the URL fragment (`#upm/v1.0.0`) to point at the desired tag, then run `Window → Package Manager → Refresh`.
+To test against a different plugin version, edit the URL fragment (`#upm/v1.2.7`) to point at the desired tag, then run `Window → Package Manager → Refresh`.
 
 To test against a local development build of the plugin, change the dependency to:
 ```json
@@ -37,7 +55,9 @@ To test against a local development build of the plugin, change the dependency t
 
 | Scene | Description |
 |-------|-------------|
-| `Assets/CubeTest.unity` | Minimal rotating cube on a tracked 3D display — verifies the basic rendering pipeline |
+| `Assets/CubeTest.unity` | Rotating cube on a tracked 3D display, plus a runtime-built window-space UI panel with IPD / virtual-display-height sliders and a render-mode cycle button. Verifies the basic rendering pipeline AND the `XrCompositionLayerWindowSpaceEXT` overlay path. |
+
+The window-space UI is constructed at runtime by `Assets/Scripts/DisplayXRTuningUI.cs` (programmatic Canvas + sliders + button — no hand-authored UI prefab). Adjust `panelX/panelY/panelWidth/panelHeight` on the `DisplayXR_TuningUI` GameObject to reposition the panel inside the runtime window.
 
 ## Running the Project
 

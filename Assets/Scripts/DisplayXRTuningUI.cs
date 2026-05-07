@@ -379,6 +379,42 @@ public class DisplayXRTuningUI : MonoBehaviour
 
     // ---- programmatic UI helpers ----
 
+    // Procedural antialiased circle sprite for slider handles. Generated
+    // once and cached statically so we don't pay the bake cost on every
+    // panel rebuild — the texture lives for the editor lifetime.
+    private static Sprite s_CircleSprite;
+    private static Sprite GetCircleSprite()
+    {
+        if (s_CircleSprite != null) return s_CircleSprite;
+        const int size = 64;
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave,
+        };
+        var px = new Color32[size * size];
+        float cx = (size - 1) * 0.5f;
+        float r = size * 0.5f - 1f;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x - cx;
+                float dy = y - cx;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float a = Mathf.Clamp01(r - d + 0.5f); // 1 px antialias band at the edge
+                px[y * size + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+            }
+        }
+        tex.SetPixels32(px);
+        tex.Apply(false, false);
+        s_CircleSprite = Sprite.Create(tex,
+            new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+        s_CircleSprite.hideFlags = HideFlags.HideAndDontSave;
+        return s_CircleSprite;
+    }
+
     GameObject MakeUIObject(string name, Transform parent)
     {
         var go = new GameObject(name, typeof(RectTransform));
@@ -467,9 +503,10 @@ public class DisplayXRTuningUI : MonoBehaviour
 
         var handleGO = MakeUIObject("Handle", handleAreaGO.transform);
         var handleRT = handleGO.GetComponent<RectTransform>();
-        handleRT.sizeDelta = new Vector2(40, 40);
+        handleRT.sizeDelta = new Vector2(32, 32);
         var handleImg = handleGO.AddComponent<Image>();
         handleImg.color = Color.white;
+        handleImg.sprite = GetCircleSprite();
 
         slider = sliderGO.AddComponent<Slider>();
         slider.fillRect = fillRT;

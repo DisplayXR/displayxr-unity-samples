@@ -33,24 +33,28 @@ public class DisplayXRTuningUI : MonoBehaviour
     [Header("Layer placement (fractional window coords)")]
     [Range(0f, 1f)] public float panelX = 0.02f;
     [Range(0f, 1f)] public float panelY = 0.65f;
-    [Range(0f, 1f)] public float panelWidth = 0.30f;
+    [Range(0f, 1f)] public float panelWidth = 0.20f;
     [Range(0f, 1f)] public float panelHeight = 0.32f;
     [Range(-0.05f, 0.05f)] public float disparity;
 
     [Header("Tunable ranges")]
     public float ipdMin = 0.0f;
-    public float ipdMax = 2.0f;
-    [Tooltip("0 = use display's physical height. Slider lets you override.")]
-    public float vHeightMin = 0.05f;
-    public float vHeightMax = 1.5f;
+    public float ipdMax = 1.0f;
+    public float ipdDefault = 1.0f;
+    [Tooltip("Multiplier over the rig's initial virtualDisplayHeight (set in editor).")]
+    public float scaleMin = 0.5f;
+    public float scaleMax = 1.5f;
+    public float scaleDefault = 1.0f;
+
+    private float m_InitialVHeight;
 
     private const int kRTWidth = 1024;
     private const int kRTHeight = 1024;
 
     private Slider m_IpdSlider;
-    private Slider m_VHeightSlider;
+    private Slider m_ScaleSlider;
     private Text m_IpdValueText;
-    private Text m_VHeightValueText;
+    private Text m_ScaleValueText;
     private Text m_ModeButtonLabel;
     private Button m_ModeButton;
     private Font m_Font;
@@ -62,16 +66,16 @@ public class DisplayXRTuningUI : MonoBehaviour
     [DllImport(kNativeLib, CallingConvention = CallingConvention.Cdecl)]
     private static extern int displayxr_standalone_enumerate_rendering_modes(
         uint capacity, out uint count,
-        [MarshalAs(UnmanagedType.LPArray)] uint[] modeIndices,
+        [Out, MarshalAs(UnmanagedType.LPArray)] uint[] modeIndices,
         System.IntPtr modeNames, // not used (would need fixed-byte buffer)
-        [MarshalAs(UnmanagedType.LPArray)] uint[] viewCounts,
-        [MarshalAs(UnmanagedType.LPArray)] uint[] tileColumns,
-        [MarshalAs(UnmanagedType.LPArray)] uint[] tileRows,
-        [MarshalAs(UnmanagedType.LPArray)] uint[] viewWidthPixels,
-        [MarshalAs(UnmanagedType.LPArray)] uint[] viewHeightPixels,
-        [MarshalAs(UnmanagedType.LPArray)] float[] viewScaleX,
-        [MarshalAs(UnmanagedType.LPArray)] float[] viewScaleY,
-        [MarshalAs(UnmanagedType.LPArray)] int[] hardwareDisplay3D);
+        [Out, MarshalAs(UnmanagedType.LPArray)] uint[] viewCounts,
+        [Out, MarshalAs(UnmanagedType.LPArray)] uint[] tileColumns,
+        [Out, MarshalAs(UnmanagedType.LPArray)] uint[] tileRows,
+        [Out, MarshalAs(UnmanagedType.LPArray)] uint[] viewWidthPixels,
+        [Out, MarshalAs(UnmanagedType.LPArray)] uint[] viewHeightPixels,
+        [Out, MarshalAs(UnmanagedType.LPArray)] float[] viewScaleX,
+        [Out, MarshalAs(UnmanagedType.LPArray)] float[] viewScaleY,
+        [Out, MarshalAs(UnmanagedType.LPArray)] int[] hardwareDisplay3D);
 
     [DllImport(kNativeLib, CallingConvention = CallingConvention.Cdecl)]
     private static extern int displayxr_standalone_request_rendering_mode(uint modeIndex);
@@ -111,6 +115,13 @@ public class DisplayXRTuningUI : MonoBehaviour
 
     void BuildPanel()
     {
+        // Capture the rig's initial vHeight before any slider drives it. The
+        // Scale slider operates as a multiplier over this baseline so the
+        // user's editor-time vHeight setting stays meaningful (slider=1 →
+        // unchanged from editor; slider=0.5 → half; slider=1.5 → 1.5x).
+        m_InitialVHeight = (displayRig != null && displayRig.virtualDisplayHeight > 0f)
+            ? displayRig.virtualDisplayHeight : 0.30f;
+
         // ---- root canvas (child of this gameobject so it's tied to scene lifecycle) ----
         // Build inactive so DisplayXRWindowSpaceUI's OnEnable doesn't fire with
         // its default 512×256 resolution before we set it. Activate at the end.
@@ -148,7 +159,9 @@ public class DisplayXRTuningUI : MonoBehaviour
         panelRT.offsetMin = Vector2.zero;
         panelRT.offsetMax = Vector2.zero;
         var panelImg = panelGO.AddComponent<Image>();
-        panelImg.color = new Color(0.06f, 0.07f, 0.10f, 0.92f);
+        // 80% transparency = 20% opacity per the cosmetic spec. The dark
+        // base lets light text/accents stay readable through the see-through.
+        panelImg.color = new Color(0.06f, 0.07f, 0.10f, 0.20f);
 
         // Subtle accent strip on the left edge for a finished look.
         var accentGO = MakeUIObject("Accent", panelGO.transform);
@@ -176,9 +189,9 @@ public class DisplayXRTuningUI : MonoBehaviour
         titleLE.preferredHeight = 50;
 
         // ---- IPD ----
+        if (displayRig != null) displayRig.ipdFactor = ipdDefault;
         BuildSliderRow(panelGO.transform, "IPD",
-            ipdMin, ipdMax,
-            displayRig != null ? displayRig.ipdFactor : 1.0f,
+            ipdMin, ipdMax, ipdDefault,
             v =>
             {
                 if (displayRig != null) displayRig.ipdFactor = v;
@@ -186,18 +199,16 @@ public class DisplayXRTuningUI : MonoBehaviour
             },
             out m_IpdSlider, out m_IpdValueText);
 
-        // ---- vHeight ----
-        // 0 means "use physical display height" — show "auto" rather than a number.
-        BuildSliderRow(panelGO.transform, "Display Height",
-            vHeightMin, vHeightMax,
-            (displayRig != null && displayRig.virtualDisplayHeight > 0f)
-                ? displayRig.virtualDisplayHeight : 0.30f,
+        // ---- Scale (multiplier over initial vHeight) ----
+        if (displayRig != null) displayRig.virtualDisplayHeight = m_InitialVHeight * scaleDefault;
+        BuildSliderRow(panelGO.transform, "Scale",
+            scaleMin, scaleMax, scaleDefault,
             v =>
             {
-                if (displayRig != null) displayRig.virtualDisplayHeight = v;
-                if (m_VHeightValueText != null) m_VHeightValueText.text = $"{v:0.00} m";
+                if (displayRig != null) displayRig.virtualDisplayHeight = m_InitialVHeight * v;
+                if (m_ScaleValueText != null) m_ScaleValueText.text = v.ToString("0.00") + "x";
             },
-            out m_VHeightSlider, out m_VHeightValueText);
+            out m_ScaleSlider, out m_ScaleValueText);
 
         // ---- render mode button ----
         var btnGO = MakeUIObject("ModeButton", panelGO.transform);
@@ -300,10 +311,12 @@ public class DisplayXRTuningUI : MonoBehaviour
             }
 
             // Default selection: first hw3d mode if any, else first. The
-            // runtime starts in its own default (typically the first mode it
-            // enumerates — often 2D), so push a request to align it with our
-            // displayed selection. Otherwise the label says "3D Side-by-Side"
-            // while the screen still shows 2D.
+            // runtime starts in its own default (typically mode 0, '2D'),
+            // so push a request_rendering_mode for the chosen slot so the
+            // visual output matches the label from the very first frame.
+            // The runtime caches the last requested mode across session
+            // restarts, so subsequent Play sessions in the same editor
+            // launch already start in the right mode regardless of this.
             m_CurrentModeArrayIdx = 0;
             for (int i = 0; i < count; i++)
             {

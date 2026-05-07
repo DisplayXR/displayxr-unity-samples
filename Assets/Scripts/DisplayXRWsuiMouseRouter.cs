@@ -92,6 +92,11 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
             m_Raycaster = m_Wsui.GetComponent<GraphicRaycaster>();
             if (m_Raycaster == null)
                 m_Raycaster = m_Wsui.gameObject.AddComponent<GraphicRaycaster>();
+            // The wsui's OverlayCamera has up=Vector3.down + looks toward -Z to
+            // Y-flip the rendered RT, which makes Dot(camera.fwd, canvas.fwd)
+            // = -1. GraphicRaycaster.ignoreReversedGraphics treats that as
+            // "back of graphic facing camera" and skips every hit.
+            m_Raycaster.ignoreReversedGraphics = false;
         }
 
         bool log = debugLog && Time.unscaledTime >= m_NextLogT;
@@ -101,6 +106,7 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
         if (!TryGetWindowMouseFractional(out Vector2 windowFrac))
         {
             if (log) Debug.Log("[wsui-router] no cursor (preview offscreen?)");
+            DisplayXR.DisplayXRWindowSpaceUI.IsCursorOverInteractive = false;
             ReleaseIfDown();
             return;
         }
@@ -112,6 +118,7 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
             windowFrac.y < m_Wsui.positionY || windowFrac.y > m_Wsui.positionY + m_Wsui.height)
         {
             if (log) Debug.Log("[wsui-router] outside wsui rect");
+            DisplayXR.DisplayXRWindowSpaceUI.IsCursorOverInteractive = m_PressTarget != null;
             ReleaseIfDown();
             return;
         }
@@ -140,6 +147,11 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
         var hits = new List<RaycastResult>();
         m_Raycaster.Raycast(m_PointerData, hits);
         var hovered = hits.Count > 0 ? hits[0].gameObject : null;
+        // Cursor is over the wsui rect; tell the plugin we own input so the
+        // scene input controller pauses cube rotation. Stays true even if we
+        // happen to hover empty space inside the panel — that matches what
+        // the user expects (cursor is "in the UI region").
+        DisplayXR.DisplayXRWindowSpaceUI.IsCursorOverInteractive = true;
         if (log)
         {
             var canvas = m_Wsui.GetComponent<Canvas>();
@@ -189,6 +201,8 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
             : default(RaycastResult);
 
         bool nowDown = IsLeftDown();
+        if (nowDown != m_LeftDown)
+            Debug.Log($"[wsui-router] click edge: leftDown {m_LeftDown}->{nowDown} hovered={(hovered == null ? "null" : hovered.name)} canvasPos=({canvasPos.x:F0},{canvasPos.y:F0})");
         if (!m_LeftDown && nowDown && hovered != null)
         {
             // Snapshot the press raycast so PointerEventData.pressEventCamera
@@ -210,12 +224,23 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
         {
             ExecuteEvents.Execute(m_PressTarget, m_PointerData, ExecuteEvents.endDragHandler);
             ExecuteEvents.Execute(m_PressTarget, m_PointerData, ExecuteEvents.pointerUpHandler);
-            if (m_PressTarget != null && hovered != null &&
-                ExecuteEvents.GetEventHandler<IPointerClickHandler>(hovered) == m_PressTarget)
+            // Fire click if the press target is itself a click handler AND
+            // either (a) the cursor is still over a child of the press target
+            // or (b) the cursor is still inside the wsui rect (lenient — a 1px
+            // jitter at release shouldn't drop a button click). Stricter
+            // Unity-style rule (require currentRaycast to resolve to the press
+            // target) is too brittle for the runtime preview where alignment
+            // is approximate.
+            var clickHandler = ExecuteEvents.GetEventHandler<IPointerClickHandler>(m_PressTarget);
+            bool overPressHierarchy = hovered != null &&
+                ExecuteEvents.GetEventHandler<IPointerClickHandler>(hovered) == clickHandler;
+            if (clickHandler != null && (overPressHierarchy || hits.Count > 0))
             {
-                ExecuteEvents.Execute(m_PressTarget, m_PointerData,
+                ExecuteEvents.Execute(clickHandler, m_PointerData,
                     ExecuteEvents.pointerClickHandler);
+                if (log) Debug.Log($"[wsui-router] click fired on {clickHandler.name}");
             }
+            else if (log) Debug.Log($"[wsui-router] click MISSED: pressTarget={(m_PressTarget == null ? "null" : m_PressTarget.name)} hovered={(hovered == null ? "null" : hovered.name)} clickHandler={(clickHandler == null ? "null" : clickHandler.name)}");
             m_PressTarget = null;
         }
 

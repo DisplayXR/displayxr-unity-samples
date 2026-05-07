@@ -133,12 +133,32 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
             string camRect = cam == null ? "?" : cam.pixelRect.ToString();
             // Sanity: try raycast at dead-center.
             var savedPos = m_PointerData.position;
-            m_PointerData.position = new Vector2(m_Wsui.resolution.x / 2f, m_Wsui.resolution.y / 2f);
+            var centerScreen = new Vector2(m_Wsui.resolution.x / 2f, m_Wsui.resolution.y / 2f);
+            m_PointerData.position = centerScreen;
             var centerHits = new List<RaycastResult>();
             m_Raycaster.Raycast(m_PointerData, centerHits);
             m_PointerData.position = savedPos;
 
-            Debug.Log($"[wsui-router] canvasPos=({canvasPos.x:F0}, {canvasPos.y:F0})  worldCamera={(cam == null ? "null" : cam.name)} pixelRect={camRect}  gfx={gfxCount} raycastTargets={raycastTargets}  hits={hits.Count}  hovered={(hovered == null ? "null" : hovered.name)}  centerHits={centerHits.Count} centerHover={(centerHits.Count > 0 ? centerHits[0].gameObject.name : "null")}");
+            // Manually replicate the rect-contains test for each graphic at center.
+            // Tells us whether ScreenPointToWorldPointInRectangle is failing or
+            // the local InverseTransformPoint check is failing.
+            string canvasInfo = "?";
+            var canvasRT = canvas.GetComponent<RectTransform>();
+            if (canvasRT != null) canvasInfo = $"rect={canvasRT.rect} pos={canvasRT.position} scale={canvasRT.localScale}";
+            string firstFew = "";
+            int probed = 0;
+            foreach (var g in canvas.GetComponentsInChildren<UnityEngine.UI.Graphic>(false))
+            {
+                if (!g.raycastTarget) continue;
+                if (probed++ >= 3) break;
+                var grt = g.rectTransform;
+                bool sptw = UnityEngine.RectTransformUtility.ScreenPointToWorldPointInRectangle(
+                    grt, centerScreen, cam, out Vector3 wp);
+                bool contains = sptw && grt.rect.Contains((Vector2)grt.InverseTransformPoint(wp));
+                firstFew += $"\n  '{g.name}' rect={grt.rect} sptw={sptw} wp={wp} contains={contains}";
+            }
+
+            Debug.Log($"[wsui-router] canvasPos=({canvasPos.x:F0}, {canvasPos.y:F0})  worldCamera={(cam == null ? "null" : cam.name)} pixelRect={camRect}  gfx={gfxCount} raycastTargets={raycastTargets}  hits={hits.Count}  hovered={(hovered == null ? "null" : hovered.name)}  centerHits={centerHits.Count}\n  canvas: {canvasInfo}{firstFew}");
         }
         // PointerEventData.pressEventCamera / enterEventCamera are read-only
         // in Unity 6's UGUI — they're derived from

@@ -629,6 +629,7 @@ GameObject:
   m_Component:
   - component: {fileID: 9000000002}
   - component: {fileID: 9000000003}
+  - component: {fileID: 9000000004}
   m_Layer: 0
   m_Name: DisplayXR_TuningUI
   m_TagString: Untagged
@@ -673,6 +674,18 @@ MonoBehaviour:
   ipdMax: 2
   vHeightMin: 0.05
   vHeightMax: 1.5
+--- !u!114 &9000000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3bbdb3d296564f64a92e41e392ff52de, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

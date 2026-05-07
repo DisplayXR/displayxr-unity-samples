@@ -58,10 +58,10 @@ upgrade materials:
 The project depends on the DisplayXR Unity plugin via Unity Package Manager. The dependency is declared in `Packages/manifest.json`:
 
 ```json
-"com.displayxr.unity": "https://github.com/DisplayXR/displayxr-unity.git#upm/v1.2.9"
+"com.displayxr.unity": "https://github.com/DisplayXR/displayxr-unity.git#upm/v1.2.10"
 ```
 
-To test against a different plugin version, edit the URL fragment (`#upm/v1.2.9`) to point at the desired tag, then run `Window → Package Manager → Refresh`.
+To test against a different plugin version, edit the URL fragment (`#upm/v1.2.10`) to point at the desired tag, then run `Window → Package Manager → Refresh`.
 
 To test against a local development build of the plugin, change the dependency to:
 ```json
@@ -74,18 +74,35 @@ To test against a local development build of the plugin, change the dependency t
 |-------|-------------|
 | `Assets/CubeTest.unity` | Rotating textured cube on a tracked 3D display + a runtime-built window-space UI panel: IPD slider, virtual-display-height slider, render-mode cycle button. Verifies basic rendering AND the `XrCompositionLayerWindowSpaceEXT` overlay path. |
 
-The window-space UI is constructed at runtime by `Assets/Scripts/DisplayXRTuningUI.cs` (programmatic Canvas + sliders + button — no hand-authored UI prefab). Adjust `panelX/panelY/panelWidth/panelHeight` on the `DisplayXR_TuningUI` GameObject to reposition the panel inside the runtime window.
+The window-space UI is constructed at runtime by
+`Assets/Scripts/DisplayXRTuningUI.cs` (programmatic Canvas + sliders +
+button — no hand-authored UI prefab). Adjust
+`panelX/panelY/panelWidth/panelHeight` on the `DisplayXR_TuningUI` GameObject
+to reposition the panel inside the runtime window.
 
-### Known limitation: read-only UI
+### Making the UI interactive — sample input router
 
 `XrCompositionLayerWindowSpaceEXT` submits pixels; it doesn't carry input.
-The plugin renders `DisplayXRWindowSpaceUI` content via a private WorldSpace
-canvas + dedicated camera, which is invisible to Unity's screen-space mouse
-raycasts — so sliders and buttons display correctly but **don't currently
-respond to clicks**. An input router that maps runtime-window mouse coords
-back to canvas-local events is tracked as a v1.2.10+ follow-up. For
-interactive UI today, render the canvas through your `DisplayXRDisplay` rig
-instead (LeiaInc-style); window-space layers are best for read-only HUDs.
+Unity's `GraphicRaycaster` works on screen-space mouse coords against
+canvases that live in screen space — but `DisplayXRWindowSpaceUI` renders
+into a private WorldSpace canvas, so without help the layer is read-only.
+
+The plugin (v1.2.10+) exposes the primitive needed:
+`DisplayXR.DisplayXRPreviewInput.TryGetPreviewMousePosition()` returns the
+runtime preview window's cursor in fractional (0..1, top-left) coords.
+Routing on top of that primitive — hit-testing the wsui layer rect, mapping
+to canvas-pixel coords, and dispatching synthetic `PointerEventData` —
+stays app-side because each consumer can choose their own input model
+(mouse / touch / hand-tracking).
+
+`Assets/Scripts/DisplayXRWsuiMouseRouter.cs` is the **sample router**
+included here. It does the canonical mouse → fractional → canvas-local →
+`EventSystem.RaycastAll` flow with drag-state tracking, so sliders and
+buttons in this scene respond to clicks. Fork it for your own input model.
+
+The router is attached to the `DisplayXR_TuningUI` GameObject in the scene
+alongside `DisplayXRTuningUI`. Removing it makes the panel read-only again
+(visual-only HUD use case).
 
 ## Running the Project
 

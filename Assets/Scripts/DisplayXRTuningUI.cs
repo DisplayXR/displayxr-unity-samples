@@ -494,16 +494,23 @@ public class DisplayXRTuningUI : MonoBehaviour
         fillRT.offsetMax = Vector2.zero;
         fillGO.AddComponent<Image>().color = new Color(0.29f, 0.62f, 1.0f, 1f);
 
+        // Handle Slide Area is intentionally fixed-height + center-anchored
+        // vertically. Unity's Slider sets handle.anchorMax.y = 1 for
+        // LeftToRight sliders, making the handle fill the slide area's
+        // height regardless of sizeDelta. So the slide area's height IS
+        // the handle's rendered height — we want a circular handle, so
+        // set both axes to the same size.
+        const int kHandleSize = 32;
         var handleAreaGO = MakeUIObject("Handle Slide Area", sliderGO.transform);
         var handleAreaRT = handleAreaGO.GetComponent<RectTransform>();
-        handleAreaRT.anchorMin = new Vector2(0, 0);
-        handleAreaRT.anchorMax = new Vector2(1, 1);
-        handleAreaRT.offsetMin = new Vector2(10, 0);
-        handleAreaRT.offsetMax = new Vector2(-10, 0);
+        handleAreaRT.anchorMin = new Vector2(0, 0.5f);
+        handleAreaRT.anchorMax = new Vector2(1, 0.5f);
+        handleAreaRT.pivot = new Vector2(0.5f, 0.5f);
+        handleAreaRT.sizeDelta = new Vector2(-20, kHandleSize);
 
         var handleGO = MakeUIObject("Handle", handleAreaGO.transform);
         var handleRT = handleGO.GetComponent<RectTransform>();
-        handleRT.sizeDelta = new Vector2(32, 32);
+        handleRT.sizeDelta = new Vector2(kHandleSize, kHandleSize);
         var handleImg = handleGO.AddComponent<Image>();
         handleImg.color = Color.white;
         handleImg.sprite = GetCircleSprite();

@@ -58,10 +58,10 @@ upgrade materials:
 The project depends on the DisplayXR Unity plugin via Unity Package Manager. The dependency is declared in `Packages/manifest.json`:
 
 ```json
-"com.displayxr.unity": "https://github.com/DisplayXR/displayxr-unity.git#upm/v1.2.12"
+"com.displayxr.unity": "https://github.com/DisplayXR/displayxr-unity.git#upm/v1.2.13"
 ```
 
-To test against a different plugin version, edit the URL fragment (`#upm/v1.2.12`) to point at the desired tag, then run `Window → Package Manager → Refresh`.
+To test against a different plugin version, edit the URL fragment (`#upm/v1.2.13`) to point at the desired tag, then run `Window → Package Manager → Refresh`.
 
 To test against a local development build of the plugin, change the dependency to:
 ```json
@@ -87,7 +87,7 @@ Unity's `GraphicRaycaster` works on screen-space mouse coords against
 canvases that live in screen space — but `DisplayXRWindowSpaceUI` renders
 into a private WorldSpace canvas, so without help the layer is read-only.
 
-The plugin (v1.2.12+) exposes the primitive needed:
+The plugin (v1.2.13+) exposes the primitive needed:
 `DisplayXR.DisplayXRPreviewInput.TryGetPreviewMousePosition()` returns the
 runtime preview window's cursor in fractional (0..1, top-left) coords.
 Routing on top of that primitive — hit-testing the wsui layer rect, mapping

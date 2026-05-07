@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "com.displayxr.unity": "file:/Users/david.fattal/Documents/GitHub/displayxr-unity",
+    "com.displayxr.unity": "https://github.com/DisplayXR/displayxr-unity.git#upm/v1.2.13",
     "com.unity.multiplayer.center": "1.0.1",
     "com.unity.render-pipelines.universal": "17.0.4",
     "com.unity.ugui": "2.0.0",

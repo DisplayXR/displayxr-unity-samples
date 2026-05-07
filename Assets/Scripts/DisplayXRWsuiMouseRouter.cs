@@ -101,25 +101,34 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
             panelFracX * m_Wsui.resolution.x,
             panelFracY * m_Wsui.resolution.y);
 
-        var eventCam = m_Wsui.GetComponent<Canvas>()?.worldCamera;
-
         // ---- 4. Synthesize PointerEventData and dispatch ----
         m_PointerData.Reset();
         m_PointerData.position = canvasPos;
         m_PointerData.delta = canvasPos - m_LastCanvasPos;
         m_PointerData.scrollDelta = Vector2.zero;
         m_PointerData.button = PointerEventData.InputButton.Left;
-        m_PointerData.pressEventCamera = eventCam;
-        m_PointerData.enterEventCamera = eventCam;
         m_PointerData.pressPosition = m_LeftDown ? m_PointerData.pressPosition : canvasPos;
 
         var hits = new List<RaycastResult>();
         m_Raycaster.Raycast(m_PointerData, hits);
         var hovered = hits.Count > 0 ? hits[0].gameObject : null;
+        // PointerEventData.pressEventCamera / enterEventCamera are read-only
+        // in Unity 6's UGUI — they're derived from
+        // pointerCurrentRaycast.module / pointerPressRaycast.module. Wire the
+        // raycast results so consumers (Slider.OnDrag's
+        // ScreenPointToLocalPointInRectangle, etc.) see OverlayCamera as the
+        // event camera and project canvasPos against the canvas correctly.
+        m_PointerData.pointerCurrentRaycast = hits.Count > 0
+            ? hits[0]
+            : default(RaycastResult);
 
         bool nowDown = IsLeftDown();
         if (!m_LeftDown && nowDown && hovered != null)
         {
+            // Snapshot the press raycast so PointerEventData.pressEventCamera
+            // resolves to OverlayCamera throughout the drag (it reads
+            // pointerPressRaycast.module).
+            m_PointerData.pointerPressRaycast = m_PointerData.pointerCurrentRaycast;
             m_PressTarget = ExecuteEvents.ExecuteHierarchy(
                 hovered, m_PointerData, ExecuteEvents.pointerDownHandler);
             if (m_PressTarget == null)

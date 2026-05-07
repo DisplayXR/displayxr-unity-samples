@@ -242,10 +242,15 @@ public class DisplayXRTuningUI : MonoBehaviour
         labelRT.offsetMin = Vector2.zero;
         labelRT.offsetMax = Vector2.zero;
 
+        // Cache for visibility toggling (Shift+Tab) and inspector-edit
+        // propagation. Looked up via stored reference so SetActive(false) +
+        // GetComponentInChildren-without-include-inactive doesn't lose us.
+        m_CanvasGO = canvasGO;
+
         // Activate now → DisplayXRWindowSpaceUI.OnEnable fires with the right
         // resolution, OverlayCamera spins up, and the RT-→-swapchain copy
         // path picks up the populated panel hierarchy on the very next frame.
-        canvasGO.SetActive(true);
+        canvasGO.SetActive(m_UIVisible);
 
         // Try to enumerate modes now; if the standalone session isn't ready
         // yet, retry from Update().
@@ -253,11 +258,14 @@ public class DisplayXRTuningUI : MonoBehaviour
     }
 
     private bool m_PrevVPressed;
+    private bool m_PrevTabPressed;
+    private bool m_UIVisible = true;
+    private GameObject m_CanvasGO;
 
     void Update()
     {
         // Push wsui placement changes from inspector edits.
-        var wsui = GetComponentInChildren<DisplayXRWindowSpaceUI>();
+        var wsui = m_CanvasGO != null ? m_CanvasGO.GetComponent<DisplayXRWindowSpaceUI>() : null;
         if (wsui != null)
         {
             wsui.positionX = panelX;
@@ -278,6 +286,18 @@ public class DisplayXRTuningUI : MonoBehaviour
         bool vNow = DisplayXRPreviewInput.IsKeyPressed('V');
         if (vNow && !m_PrevVPressed) CycleRenderMode();
         m_PrevVPressed = vNow;
+
+        // Shift+Tab toggles UI visibility. Plain Tab is already used by the
+        // plugin's DisplayXRRigManager.CycleNext (camera cycling) when Unity
+        // has focus — Shift gates this handler so the two don't fight.
+        bool tabNow = DisplayXRPreviewInput.IsKeyPressed('\t');
+        bool shiftNow = DisplayXRPreviewInput.IsKeyPressed(0x10); // Shift bitmask code
+        if (tabNow && !m_PrevTabPressed && shiftNow && m_CanvasGO != null)
+        {
+            m_UIVisible = !m_UIVisible;
+            m_CanvasGO.SetActive(m_UIVisible);
+        }
+        m_PrevTabPressed = tabNow;
     }
 
     void TryEnumerateModes()

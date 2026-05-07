@@ -48,11 +48,29 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
         m_EventSystem = EventSystem.current;
         if (m_EventSystem == null)
         {
-            // Most scenes already have one; create a minimal fallback so the
-            // sample works in stripped-down test scenes.
-            var es = new GameObject("DisplayXR_EventSystem", typeof(EventSystem),
-                typeof(StandaloneInputModule));
+            // Bare EventSystem with NO input module — projects on the new
+            // Input System Package would throw InvalidOperationException
+            // every frame from StandaloneInputModule.UpdateModule trying to
+            // read legacy UnityEngine.Input. The router synthesizes events
+            // via ExecuteEvents directly so it doesn't need a working input
+            // module; it just needs EventSystem.current to be non-null for
+            // PointerEventData construction.
+            var es = new GameObject("DisplayXR_EventSystem", typeof(EventSystem));
             m_EventSystem = es.GetComponent<EventSystem>();
+        }
+        else
+        {
+            // If a pre-existing EventSystem has a StandaloneInputModule and
+            // the project uses the new Input System Package, that module
+            // throws every frame and may corrupt EventSystem state for
+            // GraphicRaycaster. Strip it — we don't need an input module.
+            var legacy = m_EventSystem.GetComponent<StandaloneInputModule>();
+            if (legacy != null)
+            {
+                Debug.Log("[wsui-router] Removing StandaloneInputModule from existing EventSystem to silence Input-System exceptions.");
+                if (Application.isPlaying) Destroy(legacy);
+                else DestroyImmediate(legacy);
+            }
         }
         m_PointerData = new PointerEventData(m_EventSystem);
     }

@@ -59,11 +59,35 @@ To test against a local development build of the plugin, change the dependency t
 ## Verification checklist
 
 - Cube renders above the desktop with no rectangular background.
-- Magenta regions punch through to the desktop (taskbar/browser visible).
-- Clicks on the magenta region land on the underlying app.
+- Chroma-key regions punch through to the desktop (taskbar/browser visible).
+- Clicks on the chroma-key region land on the underlying app.
 - Clicks on the cube reach Unity (add a logging script to confirm).
 - Cube pops convincingly in stereo. Transparent regions stay clean (no
   shimmer — `L == R` per sub-pixel).
+
+## Limitations
+
+On Leia hardware, antialiased cube edges become hard-mask alpha (alpha=0 or
+alpha=1 with no in-between). This is a fundamental limitation of the
+chroma-key trick used by the SR weaver — fully transparent regions are
+punched through cleanly, but partial-transparency pixels on antialiased
+edges either snap to opaque (with possible fringing toward the chroma key)
+or to fully transparent. Apps that need soft alpha should choose a
+content-safe `chromaKeyColor` to minimize fringing — the current setup
+uses a near-mid-gray (`128, 127, 129`) for that reason.
+
+## Compatibility
+
+| Plugin version | Runtime version | Graphics APIs with desktop transparency |
+|---|---|---|
+| v1.2.x | runtime ≥ v25.6.x | D3D11, D3D12, Metal (macOS) |
+| v1.3.0 | runtime ≥ v25.7.0 | D3D11, D3D12, Vulkan, OpenGL, Metal (macOS) |
+
+Vulkan and OpenGL transparency landed in runtime PR #3b / PR #3c. On Vulkan,
+most Win32 ICDs only expose `OPAQUE` compositeAlpha — in that case alpha is
+dropped at WSI present and the cube renders opaque. On OpenGL, transparency
+requires `WGL_NV_DX_interop2` (NVIDIA / AMD); Intel iGPUs fall back to
+opaque presentation. D3D11 and D3D12 work on all GPUs.
 
 ## Reverting to opaque
 

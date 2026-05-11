@@ -34,26 +34,30 @@ public class TigerTuningHUD : MonoBehaviour
     public DisplayXRDisplay displayRig;
 
     [Header("Layer placement (fractional window coords)")]
-    [Range(0f, 1f)] public float panelX = 0.02f;
-    [Range(0f, 1f)] public float panelY = 0.62f;
-    [Range(0f, 1f)] public float panelWidth = 0.24f;
-    [Range(0f, 1f)] public float panelHeight = 0.30f;
+    // Narrow + slim panel, roughly centered horizontally, lower-third
+    // vertically. Tweakable via inspector (changes propagate via Update).
+    [Range(0f, 1f)] public float panelX = 0.36f;
+    [Range(0f, 1f)] public float panelY = 0.66f;
+    [Range(0f, 1f)] public float panelWidth = 0.28f;
+    [Range(0f, 1f)] public float panelHeight = 0.18f;
     [Range(-0.05f, 0.05f)] public float disparity;
 
-    // Focus slider drives camera.transform.position.z relative to the rig's
-    // startup Z. ±2 m around start covers typical "push the tiger in or out"
-    // motion without letting the user drive the camera off into the void.
-    private const float kFocusRange = 2.0f;
+    // 3D Focus drives camera.transform.position.z relative to the rig's
+    // startup Z. ±0.2 m gives fine-grained focus pull without flying the
+    // camera through the tiger.
+    private const float kFocusRange = 0.2f;
 
-    // Stereo intensity: 0 (mono) .. 1.5 (exaggerated 3D). 1.0 = nominal.
-    // Drives BOTH ipdFactor and parallaxFactor to the same value so the
-    // single knob captures "perceived 3D strength" coherently.
-    private const float kStereoMin = 0.0f;
-    private const float kStereoMax = 1.5f;
-    private const float kStereoDefault = 1.0f;
+    // 3D Depth: 0 (mono / no parallax) .. 1.0 (nominal stereo). Drives BOTH
+    // ipdFactor and parallaxFactor to the same value so the single knob
+    // captures perceived-3D strength coherently. 1.0 = default 3D feel.
+    private const float kDepthMin = 0.0f;
+    private const float kDepthMax = 1.0f;
+    private const float kDepthDefault = 1.0f;
 
+    // RT aspect matches the panel aspect (wide + short) so vertical layout
+    // doesn't get squished when the runtime stretches RT → panel rect.
     private const int kRTWidth = 1024;
-    private const int kRTHeight = 1024;
+    private const int kRTHeight = 384;
 
     private Camera m_Cam;
     private float m_InitialCamZ;
@@ -142,8 +146,8 @@ public class TigerTuningHUD : MonoBehaviour
         panelImg.color = new Color(0f, 0f, 0f, 0.20f); // 80% transparent black
 
         var layout = panelGO.AddComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(60, 60, 60, 60);
-        layout.spacing = 50;
+        layout.padding = new RectOffset(30, 30, 30, 30);
+        layout.spacing = 16;
         layout.childAlignment = TextAnchor.UpperLeft;
         layout.childControlWidth = true;
         layout.childControlHeight = false;
@@ -151,13 +155,14 @@ public class TigerTuningHUD : MonoBehaviour
         layout.childForceExpandHeight = false;
 
         // ---- title ----
-        var title = MakeText(panelGO.transform, "Title", "Tiger Tuning", 72, FontStyle.Bold);
+        var title = MakeText(panelGO.transform, "Title", "Tuning", 36, FontStyle.Bold);
         title.color = Color.white;
+        title.alignment = TextAnchor.MiddleCenter;
         var titleLE = title.gameObject.AddComponent<LayoutElement>();
-        titleLE.preferredHeight = 100;
+        titleLE.preferredHeight = 50;
 
-        // ---- Focus (camera world-Z; same as W/S) ----
-        BuildSliderRow(panelGO.transform, "Focus",
+        // ---- 3D Focus (camera world-Z; same as W/S) ----
+        BuildSliderRow(panelGO.transform, "3D Focus",
             -kFocusRange, kFocusRange, 0f,
             v =>
             {
@@ -171,14 +176,14 @@ public class TigerTuningHUD : MonoBehaviour
             },
             out m_FocusSlider, out m_FocusValueText);
 
-        // ---- Stereo intensity (drives ipdFactor + parallaxFactor) ----
+        // ---- 3D Depth (drives ipdFactor + parallaxFactor) ----
         if (displayRig != null)
         {
-            displayRig.ipdFactor = kStereoDefault;
-            displayRig.parallaxFactor = kStereoDefault;
+            displayRig.ipdFactor = kDepthDefault;
+            displayRig.parallaxFactor = kDepthDefault;
         }
-        BuildSliderRow(panelGO.transform, "Stereo",
-            kStereoMin, kStereoMax, kStereoDefault,
+        BuildSliderRow(panelGO.transform, "3D Depth",
+            kDepthMin, kDepthMax, kDepthDefault,
             v =>
             {
                 if (displayRig != null)
@@ -336,9 +341,9 @@ public class TigerTuningHUD : MonoBehaviour
     {
         var rowGO = MakeUIObject(label + "Row", parent);
         var rowLE = rowGO.AddComponent<LayoutElement>();
-        rowLE.preferredHeight = 160;
+        rowLE.preferredHeight = 110;
 
-        var labelText = MakeText(rowGO.transform, "Label", label, 44, FontStyle.Normal);
+        var labelText = MakeText(rowGO.transform, "Label", label, 28, FontStyle.Normal);
         labelText.color = new Color(0.75f, 0.78f, 0.85f, 1f);
         var labelRT = labelText.GetComponent<RectTransform>();
         labelRT.anchorMin = new Vector2(0, 0.55f);
@@ -346,7 +351,7 @@ public class TigerTuningHUD : MonoBehaviour
         labelRT.offsetMin = Vector2.zero;
         labelRT.offsetMax = Vector2.zero;
 
-        valueText = MakeText(rowGO.transform, "Value", initial.ToString("0.00"), 44, FontStyle.Bold);
+        valueText = MakeText(rowGO.transform, "Value", initial.ToString("0.00"), 28, FontStyle.Bold);
         valueText.alignment = TextAnchor.MiddleRight;
         var valueRT = valueText.GetComponent<RectTransform>();
         valueRT.anchorMin = new Vector2(0.65f, 0.55f);
@@ -387,7 +392,7 @@ public class TigerTuningHUD : MonoBehaviour
 
         // Circular knob — slide-area sets the handle's rendered height, so
         // its sizeDelta.y IS the handle diameter.
-        const int kHandleSize = 36;
+        const int kHandleSize = 26;
         var handleAreaGO = MakeUIObject("Handle Slide Area", sliderGO.transform);
         var handleAreaRT = handleAreaGO.GetComponent<RectTransform>();
         handleAreaRT.anchorMin = new Vector2(0, 0.5f);

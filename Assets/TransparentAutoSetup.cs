@@ -193,6 +193,13 @@ public class WheelZoomVHeight : MonoBehaviour
         var cam = GetComponent<Camera>();
         if (cam != null && DisplayXRRigManager.ActiveCamera != cam) return;
 
+        // Don't zoom while the cursor is over the wsui HUD — scrolling over
+        // a slider should not also zoom the scene.
+        if (DisplayXRWindowSpaceUI.IsCursorOverInteractive) {
+            overlay.ConsumeWheelDelta(); // drain to avoid burst on exit
+            return;
+        }
+
         int delta = overlay.ConsumeWheelDelta();
         if (delta == 0) return;
 

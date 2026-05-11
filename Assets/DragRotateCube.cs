@@ -48,6 +48,16 @@ public class DragRotateCube : MonoBehaviour
             m_BoundOverlay = active;
         }
 
+        // Cursor over the wsui HUD? Let the UI own all interaction.
+        // TigerHudMouseRouter sets this flag while the cursor is inside
+        // the panel rect; without the gate we'd both drive the slider AND
+        // rotate the tiger every frame the user touches the HUD.
+        if (DisplayXRWindowSpaceUI.IsCursorOverInteractive)
+        {
+            if (m_Dragging) m_Dragging = false; // cancel any in-flight drag
+            return;
+        }
+
         if (!m_Dragging || m_BoundOverlay == null) return;
         Vector2 d = m_BoundOverlay.PointerDelta;
         if (d.x == 0f) return;
@@ -78,6 +88,9 @@ public class DragRotateCube : MonoBehaviour
         // both fire causes the tiger to rotate-then-reset as the window
         // chases the cursor during right-drag.
         if (m_BoundOverlay == null || !m_BoundOverlay.IsLeftPressed) return;
+        // Suppress when cursor is over the wsui HUD — the overlay's hit-test
+        // is screen-space and doesn't know the HUD is occluding the tiger.
+        if (DisplayXRWindowSpaceUI.IsCursorOverInteractive) return;
         m_Dragging = true;
         if (m_Animator == null) m_Animator = GetComponent<Animator>();
         if (m_Animator != null && m_Animator.enabled)

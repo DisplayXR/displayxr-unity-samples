@@ -19,6 +19,11 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
+// Run BEFORE scene-input scripts (DragRotateCube, WheelZoomVHeight) so the
+// IsCursorOverInteractive flag is up-to-date when they read it later in the
+// frame. Without this, the flag lags by one frame and the first click in/out
+// of the panel "leaks" into scene rotation.
+[DefaultExecutionOrder(-100)]
 [RequireComponent(typeof(TigerTuningHUD))]
 public class TigerHudMouseRouter : MonoBehaviour
 {
@@ -45,10 +50,18 @@ public class TigerHudMouseRouter : MonoBehaviour
     void Update()
     {
         // Lazy-bind to the wsui that TigerTuningHUD builds in OnEnable.
-        if (m_Wsui == null)
+        // When the panel is toggled off (SHIFT+TAB), the canvas GameObject is
+        // SetActive(false) and GetComponentInChildren returns null — clear
+        // the gate flag so scene input handlers stop being suppressed.
+        if (m_Wsui == null || !m_Wsui.isActiveAndEnabled)
         {
             m_Wsui = GetComponentInChildren<DisplayXRWindowSpaceUI>();
-            if (m_Wsui == null) return;
+            if (m_Wsui == null || !m_Wsui.isActiveAndEnabled)
+            {
+                DisplayXRWindowSpaceUI.IsCursorOverInteractive = false;
+                ReleaseIfDown();
+                return;
+            }
         }
         if (m_Raycaster == null)
         {

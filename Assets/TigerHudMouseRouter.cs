@@ -47,6 +47,8 @@ public class TigerHudMouseRouter : MonoBehaviour
         m_PointerData = new PointerEventData(m_EventSystem);
     }
 
+    private float m_NextDiagLog;
+
     void Update()
     {
         // Lazy-bind to the wsui that TigerTuningHUD builds in OnEnable.
@@ -55,11 +57,23 @@ public class TigerHudMouseRouter : MonoBehaviour
         // the gate flag so scene input handlers stop being suppressed.
         if (m_Wsui == null || !m_Wsui.isActiveAndEnabled)
         {
-            m_Wsui = GetComponentInChildren<DisplayXRWindowSpaceUI>();
-            if (m_Wsui == null || !m_Wsui.isActiveAndEnabled)
+            // includeInactive=true so we find the wsui even when canvas is
+            // hidden — but only treat it as "live" when active+enabled.
+            var found = GetComponentInChildren<DisplayXRWindowSpaceUI>(true);
+            if (found != null && found.isActiveAndEnabled)
+            {
+                m_Wsui = found;
+            }
+            else
             {
                 DisplayXRWindowSpaceUI.IsCursorOverInteractive = false;
                 ReleaseIfDown();
+                if (Time.time >= m_NextDiagLog)
+                {
+                    m_NextDiagLog = Time.time + 2f;
+                    Debug.Log($"[TigerHudRouter] inactive — wsui found={(found != null)} " +
+                              $"active={(found != null && found.isActiveAndEnabled)}");
+                }
                 return;
             }
         }
@@ -92,6 +106,14 @@ public class TigerHudMouseRouter : MonoBehaviour
         bool insidePanel =
             windowFrac.x >= m_Wsui.positionX && windowFrac.x <= m_Wsui.positionX + m_Wsui.width &&
             windowFrac.y >= m_Wsui.positionY && windowFrac.y <= m_Wsui.positionY + m_Wsui.height;
+
+        if (Time.time >= m_NextDiagLog)
+        {
+            m_NextDiagLog = Time.time + 2f;
+            Debug.Log($"[TigerHudRouter] frac=({windowFrac.x:F3},{windowFrac.y:F3}) " +
+                      $"panel=({m_Wsui.positionX:F2},{m_Wsui.positionY:F2})..({m_Wsui.positionX + m_Wsui.width:F2},{m_Wsui.positionY + m_Wsui.height:F2}) " +
+                      $"inside={insidePanel} dragging={dragging} screen={Screen.width}x{Screen.height}");
+        }
 
         if (!insidePanel && !dragging)
         {

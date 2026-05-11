@@ -214,14 +214,22 @@ public class TigerTuningHUD : MonoBehaviour
             wsui.disparity = disparity;
         }
 
-        // SHIFT+TAB toggle. Plain Tab is bound by DisplayXRRigManager.CycleNext.
+        // SHIFT+TAB or H toggles visibility. Plain Tab is bound by
+        // DisplayXRRigManager.CycleNext for camera cycling, so SHIFT gates
+        // it. H is an alternative for keyboards where SHIFT+TAB doesn't
+        // come through (e.g. transparent-mode cloaked-window IME quirks).
         var kb = Keyboard.current;
-        if (kb != null && m_CanvasGO != null &&
-            kb.tabKey.wasPressedThisFrame &&
-            (kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed))
+        if (kb != null && m_CanvasGO != null)
         {
-            m_UIVisible = !m_UIVisible;
-            m_CanvasGO.SetActive(m_UIVisible);
+            bool shiftTab = kb.tabKey.wasPressedThisFrame &&
+                            (kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed);
+            bool hKey = kb.hKey.wasPressedThisFrame;
+            if (shiftTab || hKey)
+            {
+                m_UIVisible = !m_UIVisible;
+                m_CanvasGO.SetActive(m_UIVisible);
+                Debug.Log($"[TigerTuningHUD] toggle via {(shiftTab ? "SHIFT+TAB" : "H")} → visible={m_UIVisible}");
+            }
         }
     }
 

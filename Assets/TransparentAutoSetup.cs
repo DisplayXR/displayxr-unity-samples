@@ -35,19 +35,35 @@ public static class TransparentAutoSetup
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Install()
     {
-        var cube = GameObject.Find("Cube");
-        Renderer[] hit = null;
-        if (cube != null)
-        {
-            var r = cube.GetComponent<Renderer>();
-            if (r != null)
-                hit = new Renderer[] { r };
+        // Configurable target name — edit this constant when swapping the model.
+        const string k_TargetName = "cartoon tiger in witches hat_ rigged and animated";
 
-            // Make sure the Cube has a Collider — Physics.Raycast (used by the
-            // transparent-overlay pointer events) needs one. CubeTest.unity is
-            // a custom mesh so the default cube collider isn't there.
-            if (cube.GetComponent<Collider>() == null)
-                cube.AddComponent<BoxCollider>();
+        var targetRoot = GameObject.Find(k_TargetName);
+        Renderer targetRenderer = null;
+        Renderer[] hit = null;
+        if (targetRoot != null)
+        {
+            // SkinnedMeshRenderer sits on a child node for FBX models;
+            // MeshRenderer on the root for the original cube. Either works.
+            targetRenderer = targetRoot.GetComponentInChildren<Renderer>(true);
+            if (targetRenderer != null)
+            {
+                hit = new[] { targetRenderer };
+
+                // For SkinnedMeshRenderers the plugin manages a per-frame
+                // BakeMesh + MeshCollider on the rootBone, so we add no
+                // collider here — adding a BoxCollider on the SMR GO would
+                // shadow the per-triangle collider on AABB-inside-but-off-
+                // silhouette pixels. For plain MeshRenderers (e.g. the cube)
+                // fall back to the deferred BoxCollider helper.
+                if (!(targetRenderer is SkinnedMeshRenderer)
+                    && targetRenderer.GetComponent<Collider>() == null
+                    && targetRenderer.GetComponent<AutoBoxColliderFromRenderer>() == null)
+                {
+                    var auto = targetRenderer.gameObject.AddComponent<AutoBoxColliderFromRenderer>();
+                    auto.source = targetRenderer;
+                }
+            }
         }
 
         int installed = 0;
@@ -79,15 +95,17 @@ public static class TransparentAutoSetup
             overlay.onPointerUp   .AddListener(r2 => Debug.Log($"[CubeTest] PointerUp    {r2?.name}"));
             overlay.onPointerClick.AddListener(r2 => Debug.Log($"[CubeTest] PointerClick {r2?.name}"));
 
-            // Visible behavior: click-to-tint + drag-to-rotate the cube.
-            // Confirms left-click events reach the cube and exercises the
-            // PointerPosition / PointerDelta polling API for drag interactions.
-            if (cube != null && hit != null && hit.Length > 0)
+            // Drag-to-rotate the target. DragRotateCube goes on the ROOT so
+            // transform.Rotate spins the whole model; the renderer is passed
+            // as `target` for the click-comparison. The overlay reference is
+            // resolved by DragRotateCube itself via DisplayXRRigManager.ActiveCamera
+            // — necessary because the active-rig gate in the overlay means
+            // only the currently-active rig fires events / updates PointerDelta.
+            if (targetRoot != null && hit != null && hit.Length > 0)
             {
-                var rotate = cube.GetComponent<DragRotateCube>();
+                var rotate = targetRoot.GetComponent<DragRotateCube>();
                 if (rotate == null)
-                    rotate = cube.AddComponent<DragRotateCube>();
-                rotate.overlay = overlay;
+                    rotate = targetRoot.AddComponent<DragRotateCube>();
                 rotate.target = hit[0];
             }
 
@@ -107,6 +125,20 @@ public static class TransparentAutoSetup
                 zoom.rig = displayRig;
             }
 
+            // Foreground-only render (test-transparent#2): cull background
+            // objects entirely past the display plane. Uses Camera.cullingMatrix
+            // (not farClipPlane) so the overlay's Physics.Raycast hit detection
+            // keeps working — see ClipAtDisplayPlane class doc for the why.
+            if (cam.GetComponent<ClipAtDisplayPlane>() == null)
+                cam.gameObject.AddComponent<ClipAtDisplayPlane>();
+
+            // Tiger branch only: disable A/Q/D/E camera translation by
+            // locking world X / Y on the rig each LateUpdate. W/S
+            // (forward/back along world Z for a forward-facing rig)
+            // still works → push tiger in / out of display plane.
+            if (cam.GetComponent<LockToForwardAxis>() == null)
+                cam.gameObject.AddComponent<LockToForwardAxis>();
+
             installed++;
         }
 
@@ -114,7 +146,7 @@ public static class TransparentAutoSetup
             Debug.LogWarning("[TransparentAutoSetup] No DisplayXR rig cameras found; transparent overlay not installed.");
         else
             Debug.Log($"[TransparentAutoSetup] Transparent overlay installed on {installed} rig camera(s)" +
-                      (cube != null ? " (Cube wired as hit region)" : " (no Cube found — whole window stays clickable)"));
+                      (targetRoot != null ? $" ('{k_TargetName}' wired as hit region)" : $" (no '{k_TargetName}' found — whole window stays clickable)"));
 
         // Stop Unity from rendering the camera mirror view to the parent
         // window's backbuffer. Without this, the parent HWND fills with a
@@ -170,5 +202,99 @@ public class WheelZoomVHeight : MonoBehaviour
         float factor = Mathf.Pow(1f - zoomPerNotch, notches);
         rig.virtualDisplayHeight = Mathf.Clamp(
             rig.virtualDisplayHeight * factor, minVHeight, maxVHeight);
+    }
+}
+
+/// <summary>
+/// Adds a BoxCollider to its GameObject sized from the source Renderer's
+/// world-space bounds, converted into local space. Waits a few frames so
+/// SkinnedMeshRenderer.bounds is populated, then self-destructs.
+///
+/// Why not use Renderer.localBounds directly: for Mixamo / cm-source FBXs,
+/// SkinnedMeshRenderer.localBounds is in the mesh's source units and ignores
+/// the FBX import scale, producing a multi-hundred-meter box. renderer.bounds
+/// is the live world-space AABB that respects all transforms.
+/// </summary>
+public class AutoBoxColliderFromRenderer : MonoBehaviour
+{
+    public Renderer source;
+    int m_Frame;
+
+    void LateUpdate()
+    {
+        if (source == null) { Destroy(this); return; }
+        if (++m_Frame < 5) return;
+
+        Bounds b = source.bounds;
+        if (b.size.sqrMagnitude < 1e-6f) return;  // wait for valid bounds
+
+        var box = GetComponent<BoxCollider>();
+        if (box == null) box = gameObject.AddComponent<BoxCollider>();
+
+        Vector3 ls = transform.lossyScale;
+        box.center = transform.InverseTransformPoint(b.center);
+        box.size = new Vector3(
+            b.size.x / Mathf.Max(1e-4f, Mathf.Abs(ls.x)),
+            b.size.y / Mathf.Max(1e-4f, Mathf.Abs(ls.y)),
+            b.size.z / Mathf.Max(1e-4f, Mathf.Abs(ls.z)));
+
+        Debug.Log($"[AutoBoxCollider] {gameObject.name} sized: " +
+                  $"local center={box.center} size={box.size} | world bounds={box.bounds}");
+        Destroy(this);
+    }
+}
+
+/// <summary>
+/// Foreground-only render switch: turns on the plugin's per-view
+/// `clipAtDisplayPlane` tunable on the active rig. The plugin's native
+/// Kooima then overrides each view's projection far_z with that view's
+/// own |eye.z|*m2v (display-centric) or 1/invConvergenceDistance
+/// (camera-centric). Resolves displayxr-unity-test-transparent#2.
+///
+/// Per-view, N-view safe: the native side iterates over all xrLocateViews
+/// outputs (2, 4, 9, ... views depending on render mode) and computes a
+/// fresh far per view — sub-mm eye-Z differences propagate to sub-mm
+/// far differences automatically. C# only sets the flag.
+///
+/// Hit-test stays at full range: Camera.farClipPlane is untouched. The
+/// transparent-overlay hit test (Physics.Raycast + per-triangle bestT
+/// init) still uses farClipPlane in Unity units. Behind-display-plane
+/// geometry: invisible (clipped) AND uninclickable past the bestT init —
+/// "invisible = unclickable" alignment is intentional for foreground-only.
+///
+/// Slider interaction: FarClipDiopterSlider writes Camera.farClipPlane.
+/// With the clip-at-display-plane flag active, the rig still uses
+/// Camera.farClipPlane as the BASE tunables.farZ, but native overrides
+/// it per-view before building the projection. Slider therefore controls
+/// hit-test reach but not rendering. To use the slider as a standalone
+/// diagnostic (slider value drives rendering far again), disable this
+/// component in the inspector.
+/// </summary>
+public class ClipAtDisplayPlane : MonoBehaviour
+{
+    DisplayXRCamera m_CamCentric;
+    DisplayXRDisplay m_DisplayCentric;
+
+    void Awake()
+    {
+        m_CamCentric = GetComponent<DisplayXRCamera>();
+        m_DisplayCentric = GetComponent<DisplayXRDisplay>();
+    }
+
+    void OnEnable()
+    {
+        if (m_DisplayCentric != null) m_DisplayCentric.foregroundOnlyClip = true;
+        if (m_CamCentric != null)     m_CamCentric.foregroundOnlyClip = true;
+        Debug.Log($"[ClipAtDisplayPlane] Enabled foregroundOnlyClip on '{gameObject.name}' " +
+                  $"(display:{m_DisplayCentric != null} cam:{m_CamCentric != null}).");
+    }
+
+    void OnDisable()
+    {
+        // Clearing the flag lets the rig's next LateUpdate push tunables
+        // with clip-at-display-plane = 0 → native goes back to using the
+        // single Camera.farClipPlane for every view's far.
+        if (m_DisplayCentric != null) m_DisplayCentric.foregroundOnlyClip = false;
+        if (m_CamCentric != null)     m_CamCentric.foregroundOnlyClip = false;
     }
 }

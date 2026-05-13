@@ -27,6 +27,7 @@ using System.Collections.Generic;
 using DisplayXR;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 [RequireComponent(typeof(DisplayXRTuningUI))]
@@ -210,14 +211,19 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
         return false;
 #else
         // Built apps: the runtime composites into Unity's main window.
-        // Input.mousePosition is bottom-left → flip to top-left for fractional.
-        if (Screen.width <= 0 || Screen.height <= 0)
+        // Read cursor via the new Input System (project's activeInputHandler
+        // is 1 = Input System Package only, so legacy UnityEngine.Input
+        // returns zeros). Mouse.current.position is bottom-left → flip to
+        // top-left for fractional.
+        var mouse = Mouse.current;
+        if (mouse == null || Screen.width <= 0 || Screen.height <= 0)
         {
             frac = Vector2.zero;
             return false;
         }
-        float mx = Input.mousePosition.x;
-        float my = Input.mousePosition.y;
+        var pos = mouse.position.ReadValue();
+        float mx = pos.x;
+        float my = pos.y;
         if (mx < 0 || mx >= Screen.width || my < 0 || my >= Screen.height)
         {
             frac = Vector2.zero;
@@ -234,7 +240,8 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
         DisplayXRPreviewInput.GetPreviewMouseState(out int buttons, out int _);
         return (buttons & 0x1) != 0;
 #else
-        return Input.GetMouseButton(0);
+        var mouse = Mouse.current;
+        return mouse != null && mouse.leftButton.isPressed;
 #endif
     }
 

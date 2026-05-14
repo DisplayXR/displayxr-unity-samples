@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## Project Overview
 
-This is the **transparent overlay test variant** of the displayxr-unity test suite — the working tree for `DisplayXR/displayxr-unity#57` (chroma-key transparent overlay with stereo content on Leia 3D displays). Sibling Unity project that consumes the `com.displayxr.unity` UPM package.
+This is the **transparent overlay test variant** of the displayxr-unity test suite — the working tree for `DisplayXR/displayxr-unity#57` (alpha-native transparent overlay with stereo content on Leia 3D displays; the chroma-color workaround that was the original v1.2.0 mechanism was removed in plugin v1.6.0 / `DisplayXR/displayxr-unity#103`). Sibling Unity project that consumes the `com.displayxr.unity` UPM package.
 
 The fixture historically held a Cube; it now holds a Mixamo **"cartoon tiger in witches hat"** FBX. The scene (`Assets/CubeTest.unity`) keeps the cube around (disabled) for fallback testing.
 
@@ -32,7 +32,7 @@ All test-project components are runtime-wired by `TransparentAutoSetup` — ther
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| `TransparentAutoSetup` | `Assets/TransparentAutoSetup.cs` | Two `[RuntimeInitializeOnLoadMethod]` entrypoints: `SubsystemRegistration` requests transparent session + chroma key BEFORE the OpenXR session is created; `AfterSceneLoad` finds the tiger and wires the per-rig components. |
+| `TransparentAutoSetup` | `Assets/TransparentAutoSetup.cs` | Two `[RuntimeInitializeOnLoadMethod]` entrypoints: `SubsystemRegistration` requests the alpha-native transparent session BEFORE the OpenXR session is created; `AfterSceneLoad` finds the tiger and wires the per-rig components. |
 | `DragRotateCube` | `Assets/DragRotateCube.cs` | Left-click drag rotates the tiger root (yaw only — pitch intentionally removed). Tracks `DisplayXRRigManager.ActiveCamera` every frame and rebinds its `onPointerDown`/`Up` listeners on rig change. Pauses the Animator during drag so manual rotation isn't clobbered. Right-click ignored (the native overlay reserves it for window drag). |
 | `WheelZoomVHeight` | `Assets/TransparentAutoSetup.cs` (nested) | Scroll-wheel → `DisplayXRDisplay.virtualDisplayHeight`. Display-centric only. Active-rig gated (only the focused rig drains the wheel accumulator). |
 | `LockToForwardAxis` | `Assets/LockToForwardAxis.cs` | **Tiger-branch tweak.** Locks the rig camera's world X/Y to its startup values each `Update`, after the plugin's `DisplayXRInputController` has moved it. Net effect: AQDE keys become no-ops, only W/S still push the camera in/out (so only the in/out-of-display-plane axis is user-controllable). Uses `[DefaultExecutionOrder(int.MaxValue)]` to run after the plugin's input controller. |

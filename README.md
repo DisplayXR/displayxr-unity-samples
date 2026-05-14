@@ -1,12 +1,17 @@
 # DisplayXR Unity Test Project — Transparent Overlay Variant
 
-A test project that exercises the **chroma-key transparent overlay mode**
+A test project that exercises the **alpha-native transparent overlay mode**
 of the [DisplayXR Unity plugin](https://github.com/DisplayXR/displayxr-unity)
-(added in [#57](https://github.com/DisplayXR/displayxr-unity/issues/57)).
+(added in [#57](https://github.com/DisplayXR/displayxr-unity/issues/57); the
+chroma-color workaround was removed in v1.6.0 — see
+[`#103`](https://github.com/DisplayXR/displayxr-unity/issues/103)).
 
-The rotating cube renders above the Windows desktop with no rectangular
-background — magenta is punched through by DWM. Clicks outside the cube's
-bounding box fall through to whatever is behind the window.
+The Mixamo tiger (with a cube fallback) renders above the desktop with no
+rectangular background — Unity emits per-pixel alpha into the OpenXR
+swapchain via `XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND` and the runtime DP
+composes the captured desktop under each tile pre-weave so anti-aliased
+silhouettes carry true soft alpha. Clicks outside the silhouette fall
+through to whatever desktop window is behind.
 
 **Render pipeline:** Built-in (BiRP).
 
@@ -17,24 +22,33 @@ in one demo doesn't mask the others:
 |---|---|---|
 | [displayxr-unity-test](https://github.com/DisplayXR/displayxr-unity-test) | Display-centric vs camera-centric rigs, live rig switching | BiRP |
 | [displayxr-unity-test-2d-ui](https://github.com/DisplayXR/displayxr-unity-test-2d-ui) | `XrCompositionLayerWindowSpaceEXT` 2D UI overlay (`DisplayXRWindowSpaceUI`) | URP |
-| [displayxr-unity-test-transparent](https://github.com/DisplayXR/displayxr-unity-test-transparent) (you are here) | Chroma-key transparent overlay (`DisplayXRTransparentOverlay`, Windows-only) | BiRP |
+| [displayxr-unity-test-transparent](https://github.com/DisplayXR/displayxr-unity-test-transparent) (you are here) | Alpha-native transparent overlay (`DisplayXRTransparentOverlay`) | BiRP |
 
 ## What's different from displayxr-unity-test
 
 - `Assets/TransparentAutoSetup.cs` runs at scene load, attaches
-  `DisplayXRTransparentOverlay` to `Camera.main`, and wires the rotating
-  cube as the click-through hit region. No edits to `CubeTest.unity` needed.
+  `DisplayXRTransparentOverlay` to the rig cameras, and wires the tiger
+  (or cube fallback) as the click-through hit region. No edits to
+  `CubeTest.unity` needed.
 
 ## Requirements
 
 - **Unity 6000.3 LTS** (Unity 6) or newer
-- A **Leia SR Windows** machine for end-to-end verification (the layered-window
-  path doesn't run in the editor preview — only in a Windows standalone build)
-- The DisplayXR runtime installed (via the [installer](https://github.com/DisplayXR/displayxr-shell-releases/releases))
+- A **Leia SR Windows** machine (or recent Mac) for end-to-end verification
+  — the native window restyling path doesn't run in the editor preview,
+  only in a standalone build
+- The DisplayXR runtime installed (via the
+  [installer](https://github.com/DisplayXR/displayxr-shell-releases/releases))
+  — must be a build that advertises `XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND`
+  on the D3D11/D3D12 service compositor and has the compose-under-bg +
+  alpha-gate DP path. Plugin v1.6.0+ requires this.
 
 ## Plugin Reference
 
-The project depends on the DisplayXR Unity plugin via Unity Package Manager. The dependency is declared in `Packages/manifest.json` and tracks the latest released plugin version (the `upm` branch is force-pushed by the plugin's CI on every `v*` tag, with the prebuilt native binary):
+The project depends on the DisplayXR Unity plugin via Unity Package Manager.
+The dependency is declared in `Packages/manifest.json` and tracks the
+latest released plugin version (the `upm` branch is force-pushed by the
+plugin's CI on every `v*` tag, with the prebuilt native binary):
 
 ```json
 "com.displayxr.unity": "https://github.com/DisplayXR/displayxr-unity.git#upm"
@@ -42,52 +56,51 @@ The project depends on the DisplayXR Unity plugin via Unity Package Manager. The
 
 After editing, run `Window → Package Manager → Refresh`.
 
-To test against a local development build of the plugin, change the dependency to:
+To test against a local development build of the plugin, change the
+dependency to:
 ```json
 "com.displayxr.unity": "file:/absolute/path/to/displayxr-unity"
 ```
+and delete the `com.displayxr.unity` entry from
+`Packages/packages-lock.json` so Unity re-resolves on next open. Revert
+before committing.
 
 ## Quick start
 
 1. Open the project in Unity Hub. First import takes a few minutes.
 2. Open `Assets/CubeTest.unity`.
-3. **Build Windows standalone** (`File → Build Settings → Build`). Editor
-   Play Mode shows the magenta clear color but **does not** apply the
-   layered-window chroma key — that's a build-only path.
-4. Run the resulting `.exe` on a Leia SR machine.
+3. **Build a standalone** (`File → Build Settings → Build`). Editor Play
+   Mode shows the scene cleared to transparent but does **not** apply the
+   native window restyling — that's a build-only path.
+4. Run the resulting `.exe` (or `.app`) on a Leia SR machine.
 
 ## Verification checklist
 
-- Cube renders above the desktop with no rectangular background.
-- Chroma-key regions punch through to the desktop (taskbar/browser visible).
-- Clicks on the chroma-key region land on the underlying app.
-- Clicks on the cube reach Unity (add a logging script to confirm).
-- Cube pops convincingly in stereo. Transparent regions stay clean (no
-  shimmer — `L == R` per sub-pixel).
-
-## Limitations
-
-On Leia hardware, antialiased cube edges become hard-mask alpha (alpha=0 or
-alpha=1 with no in-between). This is a fundamental limitation of the
-chroma-key trick used by the SR weaver — fully transparent regions are
-punched through cleanly, but partial-transparency pixels on antialiased
-edges either snap to opaque (with possible fringing toward the chroma key)
-or to fully transparent. Apps that need soft alpha should choose a
-content-safe `chromaKeyColor` to minimize fringing — the current setup
-uses a near-mid-gray (`128, 127, 129`) for that reason.
+- Tiger / cube renders above the desktop with no rectangular background.
+- Anti-aliased silhouette edges blend cleanly into the desktop — no
+  chroma fringe, no hard-mask jaggies.
+- Clicks on the transparent region fall through to the underlying app
+  (e.g. Notepad activates and accepts text).
+- Clicks on the tiger reach Unity (console logs the `onPointerClick`
+  payload).
+- Tiger / cube pops convincingly in stereo. Transparent regions stay
+  clean (no shimmer).
+- Player.log shows `[DisplayXR] EnvironmentBlendMode = AlphaBlend
+  (transparent session)` and **no** `XR_ERROR_VALIDATION_FAILURE` /
+  `"is not supported for current Runtime"`.
 
 ## Compatibility
 
-| Plugin version | Runtime version | Graphics APIs with desktop transparency |
+| Plugin version | Runtime version | Mechanism |
 |---|---|---|
-| v1.2.x | runtime ≥ v25.6.x | D3D11, D3D12, Metal (macOS) |
-| v1.3.0 | runtime ≥ v25.7.0 | D3D11, D3D12, Vulkan, OpenGL, Metal (macOS) |
+| v1.2.x – v1.5.13 | runtime ≥ v25.6.x | Chroma-key (camera paints a marker color, runtime DP converts to alpha=0 post-weave). Removed in v1.6.0. |
+| **v1.6.0+** (current) | runtime advertising `ALPHA_BLEND` + compose-under-bg + alpha-gate DP path | Alpha-native end-to-end. Same path on Windows and macOS. |
 
-Vulkan and OpenGL transparency landed in runtime PR #3b / PR #3c. On Vulkan,
-most Win32 ICDs only expose `OPAQUE` compositeAlpha — in that case alpha is
-dropped at WSI present and the cube renders opaque. On OpenGL, transparency
-requires `WGL_NV_DX_interop2` (NVIDIA / AMD); Intel iGPUs fall back to
-opaque presentation. D3D11 and D3D12 work on all GPUs.
+A plugin / runtime version mismatch where the plugin is v1.6.0+ but the
+runtime doesn't advertise `ALPHA_BLEND` fails the same way as the
+v1.5.6 → v1.5.12 regression: every `xrEndFrame` returns
+`XR_ERROR_VALIDATION_FAILURE` and Unity content never reaches the
+swapchain. Cross-check Player.log when in doubt.
 
 ## Reverting to opaque
 
@@ -96,8 +109,8 @@ scene falls back to the default skybox.
 
 ## Reporting Issues
 
-For plugin bugs, file issues on the [DisplayXR Unity plugin repo](https://github.com/DisplayXR/displayxr-unity/issues).
-For runtime bugs, file issues on the [DisplayXR Shell releases repo](https://github.com/DisplayXR/displayxr-shell-releases/issues).
+For plugin bugs, file issues on the [DisplayXR Unity plugin
+repo](https://github.com/DisplayXR/displayxr-unity/issues).
 
 ## License
 

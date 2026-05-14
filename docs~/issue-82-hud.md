@@ -1,5 +1,20 @@
 # Work brief: tiger HUD + DisplayXR/displayxr-unity#82
 
+> ### ⚠️ Historical handoff (pre-v1.6.0 mechanism)
+>
+> This brief was written when the transparent overlay still painted a
+> chroma color and relied on the runtime's post-weave chroma→alpha pass.
+> That mechanism was removed in plugin **v1.6.0** (`DisplayXR/displayxr-unity#103`).
+> Step 3 of the Investigation Plan below ("try disabling the chroma key
+> via `displayxr_set_transparent_chroma_key(0)`") references an API that
+> no longer exists — the plugin now always sends `chromaKeyColor = 0` and
+> the runtime uses the compose-under-bg + alpha-gate DP path instead.
+>
+> The HUD spec and the general "wsui + transparent-overlay layer mixing"
+> investigation context are still useful if #82 resurfaces under the new
+> alpha-native path. Re-validate against the current runtime before
+> applying any of the diagnostic steps verbatim.
+
 Two coupled goals. The HUD is both the long-term tuning surface for the
 tiger test app *and* the test surface for the #82 fix — once the wsui +
 transparent-overlay crash is resolved, the HUD becomes the proof.

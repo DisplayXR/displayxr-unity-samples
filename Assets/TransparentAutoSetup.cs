@@ -12,26 +12,21 @@ using DisplayXR;
 
 public static class TransparentAutoSetup
 {
-    // Near-mid-gray instead of magenta so silhouette-edge halos blend
-    // invisibly into typical desktop backgrounds. Single source of truth —
-    // both RequestChromaKey (runtime post-weave pass) and the component's
-    // chromaKeyColor field (Unity camera clear) read it. No OS color key
-    // is involved — overlay HWND is WS_EX_NOREDIRECTIONBITMAP + DComp, and
-    // the runtime DP converts chroma RGB to alpha=0 in its post-weave pass.
-    // Trade-off: avatar/cube pixels that land exactly on (128,127,129) will
-    // go transparent — keep materials clear of this color.
-    static readonly Color s_ChromaKey = new Color(128f / 255f, 127f / 255f, 129f / 255f, 0f);
-
     // Must run BEFORE the OpenXR session is created — that's when the runtime
     // reads transparentBackgroundEnabled off XrWin32WindowBindingCreateInfoEXT
-    // and decides whether to use the BitBlt swapchain path. AfterSceneLoad is
-    // too late; SubsystemRegistration fires earlier than the XR loader init.
+    // (Windows) / XrCocoaWindowBindingCreateInfoEXT (macOS) and decides
+    // whether to use the transparent-capable swapchain path. AfterSceneLoad
+    // is too late; SubsystemRegistration fires earlier than the XR loader init.
+    //
+    // No chroma color is involved — the runtime DP composes the desktop
+    // background under each tile pre-weave and alpha-gates post-weave, so
+    // Unity's alpha=0 camera clear goes straight through with true anti-
+    // aliased silhouettes.
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void RequestTransparentSession()
     {
         DisplayXRTransparentOverlay.RequestTransparentSession();
-        DisplayXRTransparentOverlay.RequestChromaKey(s_ChromaKey);
-        Debug.Log("[TransparentAutoSetup] Requested runtime transparent-background mode + chroma key 0x00818081 (gray 128,127,129).");
+        Debug.Log("[TransparentAutoSetup] Requested runtime transparent-background mode (alpha-native).");
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -100,10 +95,6 @@ public static class TransparentAutoSetup
             var overlay = cam.GetComponent<DisplayXRTransparentOverlay>();
             if (overlay == null)
                 overlay = cam.gameObject.AddComponent<DisplayXRTransparentOverlay>();
-            // The chromaKeyColor property setter re-pushes to camera clear +
-            // native overlay, so this works even after OnEnable already ran
-            // with the magenta default during AddComponent.
-            overlay.chromaKeyColor = s_ChromaKey;
             if (hit != null)
                 overlay.clickableRenderers = hit;
 
@@ -166,7 +157,7 @@ public static class TransparentAutoSetup
         if (installed == 0)
             Debug.LogWarning("[TransparentAutoSetup] No DisplayXR rig cameras found; transparent overlay not installed.");
         else
-            Debug.Log($"[TransparentAutoSetup] Transparent overlay installed on {installed} rig camera(s)" +
+            Debug.Log($"[TransparentAutoSetup] Alpha-native transparent overlay installed on {installed} rig camera(s)" +
                       (targetRoot != null ? $" ('{k_TargetName}' wired as hit region)" : $" (no '{k_TargetName}' found — whole window stays clickable)"));
 
         // Stop Unity from rendering the camera mirror view to the parent

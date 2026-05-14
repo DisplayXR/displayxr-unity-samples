@@ -43,11 +43,11 @@ All test-project components are runtime-wired by `TransparentAutoSetup` — ther
 
 The mechanism splits across plugin (most of it) and test-project (small bootstrap):
 
-1. **Transparent session** — `TransparentAutoSetup.RequestTransparentSession()` (called from `[RuntimeInitializeOnLoadMethod(SubsystemRegistration)]`) tells the plugin to ask for a transparent OpenXR session. The plugin sets `xsi.transparentBackgroundEnabled` on `XrWin32WindowBindingCreateInfoEXT` before `xrCreateSession`; the runtime selects the BitBlt swapchain path and the post-weave shader writes `alpha=0` for chroma-key pixels.
-2. **Chroma key** — `TransparentAutoSetup.RequestChromaKey(s_ChromaKey)` passes the same color (gray `(128, 127, 129)`) to both the runtime (via `displayxr_set_transparent_chroma_key`) AND the camera clear (via `DisplayXRTransparentOverlay.chromaKeyColor`). Gray is used here instead of magenta so silhouette-edge halos blend invisibly with typical desktop backgrounds.
-3. **Per-pixel-alpha overlay HWND** — the plugin creates the overlay as a top-level `WS_POPUP` with `WS_EX_NOREDIRECTIONBITMAP`, so DWM has no opaque redirection surface and composites the HWND purely from the runtime's DComp visuals (real per-pixel alpha against the desktop). The chroma color from step 2 is **not** an OS color key — it's converted to `alpha=0` inside the runtime's post-weave DP pass before the swapchain reaches DComp. The plugin explicitly strips `WS_EX_LAYERED` off Unity's HWND and does **not** call `SetLayeredWindowAttributes`/`LWA_COLORKEY`. (Any older docs claiming `WS_EX_LAYERED | LWA_COLORKEY` describe a prior approach.)
+1. **Transparent session** — `TransparentAutoSetup.RequestTransparentSession()` (called from `[RuntimeInitializeOnLoadMethod(SubsystemRegistration)]`) tells the plugin to ask for a transparent OpenXR session. The plugin sets `xsi.transparentBackgroundEnabled` on `XrWin32WindowBindingCreateInfoEXT` and opts the session into `XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND` so Unity emits per-pixel alpha into the swapchain.
+2. **Alpha-native camera clear** — the overlay's `OnEnable` flips the camera to `CameraClearFlags.SolidColor` with `backgroundColor = (0,0,0,0)` so transparent regions emit `alpha=0` directly. No chroma color is involved anywhere. (Older plugin versions painted a gray chroma color and relied on a runtime post-weave conversion pass; that workaround was removed once the runtime's compose-under-bg + alpha-gate DP path shipped — tracked in `DisplayXR/displayxr-unity#103`.)
+3. **Per-pixel-alpha overlay HWND** — the plugin creates the overlay as a top-level `WS_POPUP` with `WS_EX_NOREDIRECTIONBITMAP`, so DWM has no opaque redirection surface and composites the HWND purely from the runtime's DComp visuals (real per-pixel alpha against the desktop). The runtime DP composes the captured desktop content under each tile pre-weave and alpha-gates post-weave, so anti-aliased silhouettes carry true soft alpha. The plugin explicitly strips `WS_EX_LAYERED` off Unity's HWND and does **not** call `SetLayeredWindowAttributes` / `LWA_COLORKEY`.
 4. **Per-pixel click-through** — `WM_NCHITTEST` in the native overlay reads `s_hit_active` (set by the C# polling code each frame). When the cyclopean ray hits the tiger silhouette → `s_hit_active=1` → `HTCLIENT` → overlay captures. Otherwise `HTTRANSPARENT` → click forwards to the underlying app via `forward_click_to_underlying_window` (`SetForegroundWindow` + `PostMessage`).
-5. **Hit testing** uses **per-triangle ray-tri** (Möller-Trumbore) against `SkinnedMeshRenderer.BakeMesh()` output, transformed via `Matrix4x4.TRS(smr.position, smr.rotation, Vector3.one)` — position + rotation only, no scale (BakeMesh's output is already in world units). 8-frame hysteresis smooths over silhouette-edge sub-pixel jitter. Active-rig gate prevents the two rigs from flapping `s_hit_active`. **This path is implemented in the plugin** (uncommitted dev work in `unity-3d-display`); the test project just sets `clickableRenderers` to the SMR.
+5. **Hit testing** uses **per-triangle ray-tri** (Möller-Trumbore) against `SkinnedMeshRenderer.BakeMesh()` output, transformed via `Matrix4x4.TRS(smr.position, smr.rotation, Vector3.one)` — position + rotation only, no scale (BakeMesh's output is already in world units). 8-frame hysteresis smooths over silhouette-edge sub-pixel jitter. Active-rig gate prevents the two rigs from flapping `s_hit_active`. Implemented entirely in the plugin; the test project just sets `clickableRenderers` to the SMR.
 
 ## Tiger asset facts
 
@@ -67,10 +67,9 @@ The manifest pins `com.displayxr.unity` to `https://github.com/DisplayXR/display
 | Feature | Plugin version |
 |---------|---------------|
 | `DisplayXRTransparentOverlay` MonoBehaviour | v1.2.0+ |
-| Chroma-key property setter (`chromaKeyColor`) | v1.2.1+ |
 | `ConsumeWheelDelta()` API | v1.2.2+ |
-| Per-triangle SMR hit-test, `LateUpdate` timing, active-rig gate, hysteresis | **uncommitted** dev work (will ship in next release) |
-| Native `s_vkey_state` fix for forwarded button events (stuck-drag) | **uncommitted** dev work (will ship in next release) |
+| Per-triangle SMR hit-test, `LateUpdate` timing, active-rig gate, hysteresis | v1.4.x+ |
+| Alpha-native transparent overlay (no chroma-color camera-paint); requires runtime with compose-under-bg + alpha-gate DP path and Windows ALPHA_BLEND advertisement | **next plugin release** (clean-break removal of `chromaKeyColor` / `RequestChromaKey` API) |
 
 ## Verification flow
 

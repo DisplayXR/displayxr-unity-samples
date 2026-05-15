@@ -70,3 +70,7 @@ crashlytics-build.properties
 # OS-specific
 .DS_Store
 Thumbs.db
+
+# DisplayXR plugin runtime log (written by built apps to the repo root)
+displayxr.log
+displayxr.log.meta

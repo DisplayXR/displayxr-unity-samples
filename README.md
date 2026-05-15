@@ -102,6 +102,17 @@ v1.5.6 → v1.5.12 regression: every `xrEndFrame` returns
 `XR_ERROR_VALIDATION_FAILURE` and Unity content never reaches the
 swapchain. Cross-check Player.log when in doubt.
 
+## Swapping the tiger for your own asset
+
+The transparent overlay's click-through is wired through a single
+`clickableRenderers` array in `Assets/TransparentAutoSetup.cs`, and
+the asset is identified by name (`k_TargetName`) — so swapping in a
+different model is mostly a one-line change. See
+[`docs~/swap-asset.md`](docs~/swap-asset.md) for the full procedure,
+import-settings checklist, multi-renderer extension, and a
+troubleshooting section keyed to the specific symptoms users hit
+historically.
+
 ## Reverting to opaque
 
 Comment out the body of `TransparentAutoSetup.Install()` and rebuild — the

@@ -69,10 +69,28 @@ before committing.
 
 1. Open the project in Unity Hub. First import takes a few minutes.
 2. Open `Assets/CubeTest.unity`.
-3. **Build a standalone** (`File → Build Settings → Build`). Editor Play
+3. **Build a standalone** (`File → Build Settings → Build`, target `Builds/Win64/DisplayXR-test/`). Editor Play
    Mode shows the scene cleared to transparent but does **not** apply the
    native window restyling — that's a build-only path.
 4. Run the resulting `.exe` (or `.app`) on a Leia SR machine.
+
+## Installing the prebuilt app
+
+End-users typically don't build from source. The [latest release](https://github.com/DisplayXR/displayxr-unity-test-transparent/releases/latest) ships a Windows installer (`DisplayXR-Unity-TestTransparent-Setup-X.Y.Z.exe`) that:
+
+- Hard-prereqs the DisplayXR runtime (requires v1.7.0+ for the alpha-native path; aborts gracefully if older or missing).
+- Installs the Player to `C:\Program Files\DisplayXR\Unity\TestTransparent\`.
+- Registers the app with the DisplayXR Shell launcher (drops a `.displayxr.json` manifest + icons under `%ProgramData%\DisplayXR\apps\`) so it appears as a tile.
+
+After installing, launch via the DisplayXR Shell tile or directly from the install dir.
+
+### Building the installer yourself
+
+Requires [NSIS](https://nsis.sourceforge.io/) installed at `C:\Program Files (x86)\NSIS\`.
+
+1. Build the Unity Player (step 3 above) — output must land at `Builds/Win64/DisplayXR-test/`.
+2. From a Developer Command Prompt: `cd installer && build-installer.bat`.
+3. Output: `installer/DisplayXR-Unity-TestTransparent-Setup-X.Y.Z.exe`. Override the version with `set VERSION=1.x.y` before invoking.
 
 ## Verification checklist
 

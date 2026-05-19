@@ -73,3 +73,6 @@ Thumbs.db
 
 # DisplayXR runtime log (written by the plugin at runtime)
 displayxr.log
+
+# Built installer artifacts (the .exe is uploaded as a release asset, not committed)
+installer/*.exe

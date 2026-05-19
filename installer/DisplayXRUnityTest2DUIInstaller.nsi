@@ -24,7 +24,7 @@
 !endif
 
 !ifndef BIN_DIR
-    !define BIN_DIR "${__FILEDIR__}\..\Builds\Win64\DisplayXR-test"
+    !define BIN_DIR "${__FILEDIR__}\..\Builds\Win64\DisplayXR-test-2d-ui"
 !endif
 !ifndef SOURCE_DIR
     !define SOURCE_DIR "${__FILEDIR__}\.."
@@ -51,9 +51,10 @@ ShowUninstDetails show
 !include "WordFunc.nsh"
 !insertmacro VersionCompare
 
-; Minimum runtime version. Window-space 2D UI overlay path
-; (XrCompositionLayerWindowSpaceEXT) is in the v1.5.x runtime family.
-!define MIN_RUNTIME_VERSION "1.5.0"
+; Minimum runtime version. Matches the gaussiansplat reference installer
+; floor (1.3.0). Window-space composition layer support has been in the
+; runtime since this stamp.
+!define MIN_RUNTIME_VERSION "1.3.0"
 
 ;--------------------------------
 ; UI
@@ -115,24 +116,23 @@ Section "DisplayXR Unity Test (2D UI)" SecApp
     CreateDirectory "$APPDATA\DisplayXR\apps"
     SetOutPath "$APPDATA\DisplayXR\apps"
 
-    ;TODO: All three Unity test installers currently drop icon.png/icon_sbs.png
-    ; into the same dir, overwriting each other. Fine for placeholder phase
-    ; (the files are identical). When per-app artwork lands, rename to
-    ; icon_unity_test_2d_ui.png / icon_sbs_unity_test_2d_ui.png and update
-    ; the manifest paths.
-    File "${SOURCE_DIR}\installer\icon.png"
-    File "${SOURCE_DIR}\installer\icon_sbs.png"
+    ; Source icons from BIN_DIR (Unity bundles icon.png + icon_sbs.png next
+    ; to the exe) — single source of truth, no duplication in the repo.
+    ; Rename on install so this variant's art doesn't collide with the cube
+    ; or transparent installers in %ProgramData%\DisplayXR\apps\.
+    File /oname=icon_unity_test_2d_ui.png "${BIN_DIR}\icon.png"
+    File /oname=icon_sbs_unity_test_2d_ui.png "${BIN_DIR}\icon_sbs.png"
 
     FileOpen $0 "$APPDATA\DisplayXR\apps\unity_test_2d_ui.displayxr.json" w
     FileWrite $0 '{$\r$\n'
     FileWrite $0 '  "schema_version": 1,$\r$\n'
-    FileWrite $0 '  "name": "DisplayXR Unity Test (2D UI)",$\r$\n'
+    FileWrite $0 '  "name": "DisplayXR-test (2D UI)",$\r$\n'
     FileWrite $0 '  "type": "3d",$\r$\n'
     FileWrite $0 '  "category": "test",$\r$\n'
     FileWrite $0 '  "display_mode": "auto",$\r$\n'
     FileWrite $0 '  "description": "Window-space 2D UI overlay test (URP) — textured cube with a runtime-built tuning panel via XrCompositionLayerWindowSpaceEXT.",$\r$\n'
-    FileWrite $0 '  "icon": "icon.png",$\r$\n'
-    FileWrite $0 '  "icon_3d": "icon_sbs.png",$\r$\n'
+    FileWrite $0 '  "icon": "icon_unity_test_2d_ui.png",$\r$\n'
+    FileWrite $0 '  "icon_3d": "icon_sbs_unity_test_2d_ui.png",$\r$\n'
     FileWrite $0 '  "icon_3d_layout": "sbs-lr",$\r$\n'
     ${WordReplace} "$INSTDIR" "\" "/" "+" $1
     FileWrite $0 '  "exe_path": "$1/DisplayXR-test.exe"$\r$\n'
@@ -191,9 +191,8 @@ Section "Uninstall"
     Pop $0
 
     Delete "$APPDATA\DisplayXR\apps\unity_test_2d_ui.displayxr.json"
-    ;TODO: shared placeholder icon filenames — see install-section TODO.
-    Delete "$APPDATA\DisplayXR\apps\icon.png"
-    Delete "$APPDATA\DisplayXR\apps\icon_sbs.png"
+    Delete "$APPDATA\DisplayXR\apps\icon_unity_test_2d_ui.png"
+    Delete "$APPDATA\DisplayXR\apps\icon_sbs_unity_test_2d_ui.png"
     RMDir "$APPDATA\DisplayXR\apps"
 
     Delete "$INSTDIR\Uninstall.exe"

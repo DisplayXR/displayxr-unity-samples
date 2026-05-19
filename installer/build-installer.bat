@@ -1,7 +1,7 @@
 @echo off
 setlocal
 set "REPO=%~dp0.."
-set "BIN_DIR=%REPO%\Builds\Win64\DisplayXR-test"
+set "BIN_DIR=%REPO%\Builds\Win64\DisplayXR-test-transparent"
 set "OUT_DIR=%~dp0"
 if "%OUT_DIR:~-1%"=="\" set "OUT_DIR=%OUT_DIR:~0,-1%"
 if "%VERSION%"=="" set "VERSION=1.7.0"

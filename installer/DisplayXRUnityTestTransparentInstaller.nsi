@@ -24,7 +24,7 @@
 !endif
 
 !ifndef BIN_DIR
-    !define BIN_DIR "${__FILEDIR__}\..\Builds\Win64\DisplayXR-test"
+    !define BIN_DIR "${__FILEDIR__}\..\Builds\Win64\DisplayXR-test-transparent"
 !endif
 !ifndef SOURCE_DIR
     !define SOURCE_DIR "${__FILEDIR__}\.."
@@ -51,12 +51,10 @@ ShowUninstDetails show
 !include "WordFunc.nsh"
 !insertmacro VersionCompare
 
-; Minimum runtime version. Alpha-native transparent overlay (plugin v1.6.0+)
-; requires a runtime that advertises XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND on
-; the D3D11/D3D12 service compositor and ships the compose-under-bg +
-; alpha-gate DP path. v1.7.0 is the first runtime stamp where the matching
-; plugin (v1.7.0) is the reference end-to-end transparent build.
-!define MIN_RUNTIME_VERSION "1.7.0"
+; Minimum runtime version. The gaussiansplat reference installer already
+; uses 1.3.0 for its transparent-bg path (XR_TRUE on session create), so
+; the same floor works for the alpha-native overlay test here.
+!define MIN_RUNTIME_VERSION "1.3.0"
 
 ;--------------------------------
 ; UI
@@ -95,7 +93,7 @@ Function .onInit
 
     ${VersionCompare} "$1" "${MIN_RUNTIME_VERSION}" $2
     ${If} $2 == 2
-        MessageBox MB_ICONSTOP "DisplayXR runtime $1 is too old.$\r$\n$\r$\nThe transparent-overlay test app requires runtime ${MIN_RUNTIME_VERSION} or later (needs XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND on the D3D11/D3D12 service).$\r$\n$\r$\nUpdate from:$\r$\nhttps://github.com/DisplayXR/displayxr-runtime/releases"
+        MessageBox MB_ICONSTOP "DisplayXR runtime $1 is too old.$\r$\n$\r$\nThe transparent-overlay test app requires runtime ${MIN_RUNTIME_VERSION} or later.$\r$\n$\r$\nUpdate from:$\r$\nhttps://github.com/DisplayXR/displayxr-runtime/releases"
         Abort
     ${EndIf}
 FunctionEnd
@@ -118,24 +116,23 @@ Section "DisplayXR Unity Test (Transparent)" SecApp
     CreateDirectory "$APPDATA\DisplayXR\apps"
     SetOutPath "$APPDATA\DisplayXR\apps"
 
-    ;TODO: All three Unity test installers currently drop icon.png/icon_sbs.png
-    ; into the same dir, overwriting each other. Fine for placeholder phase
-    ; (the files are identical). When per-app artwork lands, rename to
-    ; icon_unity_test_transparent.png / icon_sbs_unity_test_transparent.png
-    ; and update the manifest paths.
-    File "${SOURCE_DIR}\installer\icon.png"
-    File "${SOURCE_DIR}\installer\icon_sbs.png"
+    ; Source icons from BIN_DIR (Unity bundles icon.png + icon_sbs.png next
+    ; to the exe) — single source of truth, no duplication in the repo.
+    ; Rename on install so this variant's art doesn't collide with the cube
+    ; or 2D-UI installers in %ProgramData%\DisplayXR\apps\.
+    File /oname=icon_unity_test_transparent.png "${BIN_DIR}\icon.png"
+    File /oname=icon_sbs_unity_test_transparent.png "${BIN_DIR}\icon_sbs.png"
 
     FileOpen $0 "$APPDATA\DisplayXR\apps\unity_test_transparent.displayxr.json" w
     FileWrite $0 '{$\r$\n'
     FileWrite $0 '  "schema_version": 1,$\r$\n'
-    FileWrite $0 '  "name": "DisplayXR Unity Test (Transparent)",$\r$\n'
+    FileWrite $0 '  "name": "DisplayXR-test (Transparent)",$\r$\n'
     FileWrite $0 '  "type": "3d",$\r$\n'
     FileWrite $0 '  "category": "test",$\r$\n'
     FileWrite $0 '  "display_mode": "auto",$\r$\n'
     FileWrite $0 '  "description": "Alpha-native transparent overlay test — tiger silhouette over the desktop, clicks fall through outside the hit region.",$\r$\n'
-    FileWrite $0 '  "icon": "icon.png",$\r$\n'
-    FileWrite $0 '  "icon_3d": "icon_sbs.png",$\r$\n'
+    FileWrite $0 '  "icon": "icon_unity_test_transparent.png",$\r$\n'
+    FileWrite $0 '  "icon_3d": "icon_sbs_unity_test_transparent.png",$\r$\n'
     FileWrite $0 '  "icon_3d_layout": "sbs-lr",$\r$\n'
     ${WordReplace} "$INSTDIR" "\" "/" "+" $1
     FileWrite $0 '  "exe_path": "$1/DisplayXR-test.exe"$\r$\n'
@@ -194,9 +191,8 @@ Section "Uninstall"
     Pop $0
 
     Delete "$APPDATA\DisplayXR\apps\unity_test_transparent.displayxr.json"
-    ;TODO: shared placeholder icon filenames — see install-section TODO.
-    Delete "$APPDATA\DisplayXR\apps\icon.png"
-    Delete "$APPDATA\DisplayXR\apps\icon_sbs.png"
+    Delete "$APPDATA\DisplayXR\apps\icon_unity_test_transparent.png"
+    Delete "$APPDATA\DisplayXR\apps\icon_sbs_unity_test_transparent.png"
     RMDir "$APPDATA\DisplayXR\apps"
 
     Delete "$INSTDIR\Uninstall.exe"

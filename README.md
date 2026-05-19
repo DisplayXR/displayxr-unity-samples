@@ -54,7 +54,25 @@ To test against a local development build of the plugin, change the dependency t
 
 1. With a spatial display connected: Press Play in the Unity Editor — the scene will render with stereo 3D and head tracking
 2. Without hardware: The DisplayXR runtime's `sim_display` driver activates automatically — use WASD + mouse to simulate eye movement
-3. To build a standalone player: `File → Build Settings → Build`
+3. To build a standalone player: `File → Build Settings → Build` (target `Builds/Win64/DisplayXR-test/`)
+
+## Installing the Prebuilt App
+
+End-users typically don't build from source. The [latest release](https://github.com/DisplayXR/displayxr-unity-test/releases/latest) ships a Windows installer (`DisplayXR-Unity-Test-Setup-X.Y.Z.exe`) that:
+
+- Hard-prereqs the DisplayXR runtime (aborts gracefully if missing).
+- Installs the Player to `C:\Program Files\DisplayXR\Unity\Test\`.
+- Registers the app with the DisplayXR Shell launcher (drops a `.displayxr.json` manifest + icons under `%ProgramData%\DisplayXR\apps\`) so it appears as a tile.
+
+After installing, launch via the DisplayXR Shell tile or directly from the install dir.
+
+### Building the installer yourself
+
+Requires [NSIS](https://nsis.sourceforge.io/) installed at `C:\Program Files (x86)\NSIS\`.
+
+1. Build the Unity Player (step 3 above) — output must land at `Builds/Win64/DisplayXR-test/`.
+2. From a Developer Command Prompt: `cd installer && build-installer.bat`.
+3. Output: `installer/DisplayXR-Unity-Test-Setup-X.Y.Z.exe`. Override the version with `set VERSION=1.x.y` before invoking.
 
 ## Reporting Issues
 

@@ -8,7 +8,7 @@
         "com.unity.xr.openxr": "1.16.1",
         "com.unity.xr.management": "4.4.0"
       },
-      "hash": "39b073149719819722701a7cfecaf80098b54311"
+      "hash": "bd630e1c3625b2da3e037463934340b9e0554c7f"
     },
     "com.unity.burst": {
       "version": "1.8.28",

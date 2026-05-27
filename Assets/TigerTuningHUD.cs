@@ -13,7 +13,7 @@ using UnityEngine.UI;
 ///   - Focus       : drives the active camera's world-Z position (same as W/S keys).
 ///   - Stereo      : single knob driving DisplayXRDisplay.ipdFactor AND
 ///                   DisplayXRDisplay.parallaxFactor together — one perceived-3D
-///                   strength control.
+///                   strength control (same as +/- keys).
 ///
 /// Cosmetic spec:
 ///   - Black panel at 20% opacity (80% transparent).
@@ -58,6 +58,9 @@ public class TigerTuningHUD : MonoBehaviour
     private const float kDepthMin = 0.0f;
     private const float kDepthMax = 1.0f;
     private const float kDepthDefault = 1.0f;
+    // +/- keyboard ramp rate for 3D Depth, in factor-units per second.
+    // Mirrors W/S → focus (held-key continuous). 0.5 = full 0..1 sweep in 2 s.
+    private const float kDepthRampPerSec = 0.5f;
 
     // RT height matches the content stack so there's no dead space below
     // the bottom slider: title (90) + spacing (30) + 2× row (200) + spacing
@@ -257,18 +260,14 @@ public class TigerTuningHUD : MonoBehaviour
             }
         }
 
-        // SHIFT+TAB toggles visibility. Plain Tab is bound by
-        // DisplayXRRigManager.CycleNext for camera cycling, so SHIFT gates
-        // it.
-        //
-        // Gate on our process owning the foreground window: in
+        // Keyboard handling (+/- ramps 3D Depth, SHIFT+TAB toggles the panel)
+        // is gated on our process owning the foreground window: in
         // transparent-overlay builds runInBackground=true and the plugin
         // requests raw input via RIDEV_INPUTSINK so the cube/HUD stay
         // live when the window is defocused. Side-effect: Keyboard.current
         // sees every keystroke system-wide, including the user typing in
-        // another app they clicked through to. Without this gate, hitting
-        // SHIFT+TAB while typing in Notepad would pop the HUD back over
-        // the tiger.
+        // another app they clicked through to. Without this gate, +/- or
+        // SHIFT+TAB while typing in Notepad would leak into the HUD.
         //
         // We can't compare GetForegroundWindow().class to "DisplayXROverlay"
         // because the overlay HWND has WS_EX_NOACTIVATE — it never claims
@@ -276,18 +275,43 @@ public class TigerTuningHUD : MonoBehaviour
         // displayxr_is_our_process_foreground() which checks every window
         // owned by our process (Unity's cloaked HWND + the overlay) against
         // the foreground HWND's PID. Same signal DisplayXRInputController
-        // uses to gate WASD movement, so SHIFT+TAB and W/S now share the
+        // uses to gate WASD movement, so the HUD keys and W/S share the
         // same "our app is focused" definition.
         var kb = Keyboard.current;
-        if (kb != null && m_CanvasGO != null && IsOurProcessForeground())
+        if (kb != null && IsOurProcessForeground())
         {
-            bool shiftTab = kb.tabKey.wasPressedThisFrame &&
-                            (kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed);
-            if (shiftTab)
+            // +/- ramps 3D Depth (ipdFactor + parallaxFactor together),
+            // mirroring W/S → focus. Held-key continuous ramp at
+            // kDepthRampPerSec. Accept the unshifted '=' as '+' and the numpad
+            // keys so it works on any layout. The Depth read-back above mirrors
+            // the new value into the slider (same 1-frame lag as W/S → Focus).
+            if (displayRig != null)
             {
-                m_UIVisible = !m_UIVisible;
-                m_CanvasGO.SetActive(m_UIVisible);
-                Debug.Log($"[TigerTuningHUD] toggle via SHIFT+TAB → visible={m_UIVisible}");
+                float step = 0f;
+                if (kb.equalsKey.isPressed || kb.numpadPlusKey.isPressed)
+                    step += kDepthRampPerSec * Time.deltaTime;
+                if (kb.minusKey.isPressed || kb.numpadMinusKey.isPressed)
+                    step -= kDepthRampPerSec * Time.deltaTime;
+                if (step != 0f)
+                {
+                    float v = Mathf.Clamp(displayRig.ipdFactor + step, kDepthMin, kDepthMax);
+                    displayRig.ipdFactor = v;
+                    displayRig.parallaxFactor = v;
+                }
+            }
+
+            // SHIFT+TAB toggles visibility. Plain Tab is bound by
+            // DisplayXRRigManager.CycleNext for camera cycling, so SHIFT gates it.
+            if (m_CanvasGO != null)
+            {
+                bool shiftTab = kb.tabKey.wasPressedThisFrame &&
+                                (kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed);
+                if (shiftTab)
+                {
+                    m_UIVisible = !m_UIVisible;
+                    m_CanvasGO.SetActive(m_UIVisible);
+                    Debug.Log($"[TigerTuningHUD] toggle via SHIFT+TAB → visible={m_UIVisible}");
+                }
             }
         }
     }

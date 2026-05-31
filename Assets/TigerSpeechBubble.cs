@@ -113,9 +113,9 @@ public class TigerSpeechBubble : MonoBehaviour
             Mathf.RoundToInt(tigerW * m_PanelW),
             Mathf.RoundToInt(tigerH * m_PanelH));
 
-        // Soft-white comic speech bubble, top-center in the surround region above
-        // the tiger, with a tail pointing down at it. Width ~40% of the window.
-        Color bubbleColor = new Color(0.97f, 0.97f, 0.99f, 0.93f); // soft white
+        // Dark, translucent comic speech bubble, top-center in the surround region
+        // above the tiger, with a tail pointing down at it. Width 50% of window.
+        Color bubbleColor = new Color(0.06f, 0.07f, 0.11f, 0.86f); // dark translucent
         m_CanvasRT = canvasGO.GetComponent<RectTransform>();
         var panelGO = MakeUI("Bubble", canvasGO.transform);
         var prt = panelGO.GetComponent<RectTransform>();
@@ -123,30 +123,32 @@ public class TigerSpeechBubble : MonoBehaviour
         prt.anchorMin = new Vector2(0.5f, 1f);
         prt.anchorMax = new Vector2(0.5f, 1f);
         prt.pivot = new Vector2(0.5f, 1f);
-        prt.sizeDelta = new Vector2(m_PanelW * 0.40f, m_PanelH * 0.19f);
-        prt.anchoredPosition = new Vector2(0f, -m_PanelH * 0.03f); // small top margin
+        prt.sizeDelta = new Vector2(m_PanelW * 0.50f, m_PanelH * 0.18f);
+        prt.anchoredPosition = new Vector2(0f, -m_PanelH * 0.025f); // small top margin
         var img = panelGO.AddComponent<Image>();
         img.sprite = RoundedRect();
         img.type = Image.Type.Sliced;
         img.color = bubbleColor;
 
         // Comic tail: a triangle hanging off the bubble's bottom edge, pointing
-        // down at the tiger (the canvas sub-rect sits just below the bubble).
-        // ignoreLayout so the VerticalLayoutGroup doesn't reflow it.
+        // down at the tiger (the canvas sub-rect sits just below). Child of the
+        // panel so it shows/hides with SHIFT+B, but ignoreLayout so the
+        // VerticalLayoutGroup leaves it alone. Its wide base overlaps a little up
+        // into the bubble bottom so the two read as one shape; the apex points down.
         var tailGO = MakeUI("Tail", panelGO.transform);
         tailGO.AddComponent<LayoutElement>().ignoreLayout = true;
         var trt = tailGO.GetComponent<RectTransform>();
         trt.anchorMin = new Vector2(0.5f, 0f);   // panel bottom-center
         trt.anchorMax = new Vector2(0.5f, 0f);
         trt.pivot = new Vector2(0.5f, 1f);        // hang downward from the top
-        trt.sizeDelta = new Vector2(m_PanelW * 0.045f, m_PanelH * 0.05f);
-        trt.anchoredPosition = new Vector2(-m_PanelW * 0.03f, m_PanelH * 0.004f); // slight left lean, tiny overlap
+        trt.sizeDelta = new Vector2(m_PanelW * 0.055f, m_PanelH * 0.06f);
+        trt.anchoredPosition = new Vector2(-m_PanelW * 0.04f, m_PanelH * 0.012f); // left lean; base overlaps up into the bubble
         var tailImg = tailGO.AddComponent<Image>();
         tailImg.sprite = TriangleDown();
         tailImg.color = bubbleColor;
 
         var layout = panelGO.AddComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(40, 40, 30, 34);
+        layout.padding = new RectOffset(44, 44, 28, 32);
         layout.spacing = 8;
         layout.childAlignment = TextAnchor.MiddleCenter;
         layout.childControlWidth = true;
@@ -155,10 +157,10 @@ public class TigerSpeechBubble : MonoBehaviour
 
         var t = MakeText(panelGO.transform, "Title", title, 40, FontStyle.Bold);
         t.alignment = TextAnchor.MiddleCenter;
-        t.color = new Color(0.11f, 0.13f, 0.18f, 1f);  // near-black ink
+        t.color = Color.white;
         var b = MakeText(panelGO.transform, "Body", body, 28, FontStyle.Normal);
         b.alignment = TextAnchor.MiddleCenter;
-        b.color = new Color(0.24f, 0.27f, 0.34f, 1f);  // dark slate
+        b.color = new Color(0.82f, 0.86f, 0.95f, 1f);  // light slate
 
         m_CanvasGO = canvasGO;
         // Keep the canvas (and its DisplayXRSurround) ALWAYS active so the canvas

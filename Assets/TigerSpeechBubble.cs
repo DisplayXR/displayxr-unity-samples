@@ -29,9 +29,10 @@ public class TigerSpeechBubble : MonoBehaviour
     [Range(0f, 1f)] public float tigerH = 0.66f;
 
     [Header("Bubble")]
-    [TextArea] public string title = "DisplayXR";
+    [TextArea] public string title = "Hi, I'm Leo";
     [TextArea] public string body =
-        "2D surround — full-resolution text\ncomposited post-weave over the 3D tiger.";
+        "your on-screen assistant. I can open apps, find your files, " +
+        "and keep your windows tidy. Just ask!\n\nSo, how can I help you today?";
 
     private GameObject m_CanvasGO;
     private DisplayXRSurround m_Surround;
@@ -112,8 +113,9 @@ public class TigerSpeechBubble : MonoBehaviour
             Mathf.RoundToInt(tigerW * m_PanelW),
             Mathf.RoundToInt(tigerH * m_PanelH));
 
-        // Bubble panel: top-center, in the surround region above the tiger.
-        // Width ~46% of the window, height ~22%, near the top edge.
+        // Soft-white comic speech bubble, top-center in the surround region above
+        // the tiger, with a tail pointing down at it. Width ~40% of the window.
+        Color bubbleColor = new Color(0.97f, 0.97f, 0.99f, 0.93f); // soft white
         m_CanvasRT = canvasGO.GetComponent<RectTransform>();
         var panelGO = MakeUI("Bubble", canvasGO.transform);
         var prt = panelGO.GetComponent<RectTransform>();
@@ -121,27 +123,42 @@ public class TigerSpeechBubble : MonoBehaviour
         prt.anchorMin = new Vector2(0.5f, 1f);
         prt.anchorMax = new Vector2(0.5f, 1f);
         prt.pivot = new Vector2(0.5f, 1f);
-        prt.sizeDelta = new Vector2(m_PanelW * 0.46f, m_PanelH * 0.22f);
+        prt.sizeDelta = new Vector2(m_PanelW * 0.40f, m_PanelH * 0.19f);
         prt.anchoredPosition = new Vector2(0f, -m_PanelH * 0.03f); // small top margin
         var img = panelGO.AddComponent<Image>();
         img.sprite = RoundedRect();
         img.type = Image.Type.Sliced;
-        img.color = new Color(0.05f, 0.06f, 0.09f, 0.82f); // dark, slightly translucent
+        img.color = bubbleColor;
+
+        // Comic tail: a triangle hanging off the bubble's bottom edge, pointing
+        // down at the tiger (the canvas sub-rect sits just below the bubble).
+        // ignoreLayout so the VerticalLayoutGroup doesn't reflow it.
+        var tailGO = MakeUI("Tail", panelGO.transform);
+        tailGO.AddComponent<LayoutElement>().ignoreLayout = true;
+        var trt = tailGO.GetComponent<RectTransform>();
+        trt.anchorMin = new Vector2(0.5f, 0f);   // panel bottom-center
+        trt.anchorMax = new Vector2(0.5f, 0f);
+        trt.pivot = new Vector2(0.5f, 1f);        // hang downward from the top
+        trt.sizeDelta = new Vector2(m_PanelW * 0.045f, m_PanelH * 0.05f);
+        trt.anchoredPosition = new Vector2(-m_PanelW * 0.03f, m_PanelH * 0.004f); // slight left lean, tiny overlap
+        var tailImg = tailGO.AddComponent<Image>();
+        tailImg.sprite = TriangleDown();
+        tailImg.color = bubbleColor;
 
         var layout = panelGO.AddComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(48, 48, 36, 36);
-        layout.spacing = 16;
+        layout.padding = new RectOffset(40, 40, 30, 34);
+        layout.spacing = 8;
         layout.childAlignment = TextAnchor.MiddleCenter;
         layout.childControlWidth = true;
         layout.childControlHeight = true;
         layout.childForceExpandWidth = true;
 
-        var t = MakeText(panelGO.transform, "Title", title, 72, FontStyle.Bold);
+        var t = MakeText(panelGO.transform, "Title", title, 40, FontStyle.Bold);
         t.alignment = TextAnchor.MiddleCenter;
-        t.color = Color.white;
-        var b = MakeText(panelGO.transform, "Body", body, 44, FontStyle.Normal);
+        t.color = new Color(0.11f, 0.13f, 0.18f, 1f);  // near-black ink
+        var b = MakeText(panelGO.transform, "Body", body, 28, FontStyle.Normal);
         b.alignment = TextAnchor.MiddleCenter;
-        b.color = new Color(0.82f, 0.86f, 0.95f, 1f);
+        b.color = new Color(0.24f, 0.27f, 0.34f, 1f);  // dark slate
 
         m_CanvasGO = canvasGO;
         // Keep the canvas (and its DisplayXRSurround) ALWAYS active so the canvas
@@ -270,7 +287,7 @@ public class TigerSpeechBubble : MonoBehaviour
     private static Sprite RoundedRect()
     {
         if (s_Rounded != null) return s_Rounded;
-        const int size = 64, radius = 22;
+        const int size = 64, radius = 30;
         var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
         {
             filterMode = FilterMode.Bilinear,
@@ -294,5 +311,38 @@ public class TigerSpeechBubble : MonoBehaviour
             100f, 0, SpriteMeshType.FullRect, new Vector4(radius, radius, radius, radius));
         s_Rounded.hideFlags = HideFlags.HideAndDontSave;
         return s_Rounded;
+    }
+
+    // Procedural downward-pointing triangle (white, alpha inside; tinted via
+    // Image.color) for the comic speech-bubble tail. Apex at the bottom-center
+    // (texture row 0), base across the top — so it hangs off the bubble's bottom
+    // edge and points down at the tiger. ~1px edge antialiasing on the slants.
+    private static Sprite s_Tail;
+    private static Sprite TriangleDown()
+    {
+        if (s_Tail != null) return s_Tail;
+        const int size = 64;
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave,
+        };
+        var px = new Color32[size * size];
+        float half = size * 0.5f;
+        for (int y = 0; y < size; y++)        // y=0 = bottom row = apex
+            for (int x = 0; x < size; x++)
+            {
+                float t = (float)y / (size - 1);                 // 0 apex (bottom) → 1 base (top)
+                float halfW = t * half;                          // triangle half-width at this row
+                float d = halfW - Mathf.Abs((x + 0.5f) - half);  // >0 inside (≈px units)
+                float a = Mathf.Clamp01(d);                      // 1px AA on the slanted edges
+                px[y * size + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+            }
+        tex.SetPixels32(px);
+        tex.Apply(false, false);
+        s_Tail = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        s_Tail.hideFlags = HideFlags.HideAndDontSave;
+        return s_Tail;
     }
 }

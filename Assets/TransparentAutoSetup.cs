@@ -36,36 +36,58 @@ public static class TransparentAutoSetup
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Install()
     {
-        // Configurable target name — edit this constant when swapping the model.
-        const string k_TargetName = "cartoon tiger in witches hat_ rigged and animated";
-
-        var targetRoot = GameObject.Find(k_TargetName);
-        Renderer targetRenderer = null;
-        Renderer[] hit = null;
-        if (targetRoot != null)
+        // Configurable target names — EVERY object listed here joins the
+        // click-through silhouette mask AND becomes an independent clickable
+        // hit region. The mask is the union of all these renderers' per-eye
+        // silhouettes; the plugin feeds that union to SetWindowRgn, which is a
+        // hard window-shape clip. So an object NOT in this list is cut away
+        // (invisible + unclickable) wherever it falls outside the listed
+        // objects' silhouettes — that's why a freshly-added cube looked
+        // "clipped" until it was added here. Add an object's GameObject name
+        // to make it visible through the overlay and drag-rotatable.
+        //
+        // Foreground-only clip at the display plane (ClipAtDisplayPlane below)
+        // applies to ALL geometry per-view, so every target here is also
+        // clipped at the display plane automatically.
+        string[] k_TargetNames =
         {
-            // SkinnedMeshRenderer sits on a child node for FBX models;
-            // MeshRenderer on the root for the original cube. Either works.
-            targetRenderer = targetRoot.GetComponentInChildren<Renderer>(true);
-            if (targetRenderer != null)
-            {
-                hit = new[] { targetRenderer };
+            "cartoon tiger in witches hat_ rigged and animated",
+            "Cube",
+        };
 
-                // For SkinnedMeshRenderers the plugin manages a per-frame
-                // BakeMesh + MeshCollider on the rootBone, so we add no
-                // collider here — adding a BoxCollider on the SMR GO would
-                // shadow the per-triangle collider on AABB-inside-but-off-
-                // silhouette pixels. For plain MeshRenderers (e.g. the cube)
-                // fall back to the deferred BoxCollider helper.
-                if (!(targetRenderer is SkinnedMeshRenderer)
-                    && targetRenderer.GetComponent<Collider>() == null
-                    && targetRenderer.GetComponent<AutoBoxColliderFromRenderer>() == null)
-                {
-                    var auto = targetRenderer.gameObject.AddComponent<AutoBoxColliderFromRenderer>();
-                    auto.source = targetRenderer;
-                }
+        var targetRoots = new System.Collections.Generic.List<GameObject>();
+        var hitList = new System.Collections.Generic.List<Renderer>();
+        foreach (var name in k_TargetNames)
+        {
+            var root = GameObject.Find(name);
+            if (root == null) continue;
+
+            // SkinnedMeshRenderer sits on a child node for FBX models;
+            // MeshRenderer on the root for the cube. Either works.
+            var rend = root.GetComponentInChildren<Renderer>(true);
+            if (rend == null) continue;
+
+            targetRoots.Add(root);
+            hitList.Add(rend);
+
+            // For SkinnedMeshRenderers the plugin manages a per-frame
+            // BakeMesh + MeshCollider on the rootBone, so we add no
+            // collider here — adding a BoxCollider on the SMR GO would
+            // shadow the per-triangle collider on AABB-inside-but-off-
+            // silhouette pixels. For plain MeshRenderers (e.g. the cube)
+            // ensure a collider exists for the raycast; the scene cube
+            // already ships a BoxCollider, but fall back to the deferred
+            // helper for any cube-like target that lacks one.
+            if (!(rend is SkinnedMeshRenderer)
+                && rend.GetComponent<Collider>() == null
+                && rend.GetComponent<AutoBoxColliderFromRenderer>() == null)
+            {
+                var auto = rend.gameObject.AddComponent<AutoBoxColliderFromRenderer>();
+                auto.source = rend;
             }
         }
+
+        Renderer[] hit = hitList.Count > 0 ? hitList.ToArray() : null;
 
         int installed = 0;
         foreach (var cam in Camera.allCameras)
@@ -111,18 +133,21 @@ public static class TransparentAutoSetup
             overlay.onPointerUp   .AddListener(r2 => Debug.Log($"[CubeTest] PointerUp    {r2?.name}"));
             overlay.onPointerClick.AddListener(r2 => Debug.Log($"[CubeTest] PointerClick {r2?.name}"));
 
-            // Drag-to-rotate the target. DragRotateCube goes on the ROOT so
-            // transform.Rotate spins the whole model; the renderer is passed
-            // as `target` for the click-comparison. The overlay reference is
-            // resolved by DragRotateCube itself via DisplayXRRigManager.ActiveCamera
-            // — necessary because the active-rig gate in the overlay means
-            // only the currently-active rig fires events / updates PointerDelta.
-            if (targetRoot != null && hit != null && hit.Length > 0)
+            // Drag-to-rotate each target independently. DragRotateCube goes on
+            // the ROOT so transform.Rotate spins the whole model; the renderer
+            // is passed as `target` for the click-comparison. DragRotateCube
+            // gates on `r != target` in OnDown, so one instance per object
+            // never conflicts — each only rotates the object under the pointer.
+            // The overlay reference is resolved by DragRotateCube itself via
+            // DisplayXRRigManager.ActiveCamera — necessary because the
+            // active-rig gate in the overlay means only the currently-active
+            // rig fires events / updates PointerDelta.
+            for (int t = 0; t < targetRoots.Count; t++)
             {
-                var rotate = targetRoot.GetComponent<DragRotateCube>();
+                var rotate = targetRoots[t].GetComponent<DragRotateCube>();
                 if (rotate == null)
-                    rotate = targetRoot.AddComponent<DragRotateCube>();
-                rotate.target = hit[0];
+                    rotate = targetRoots[t].AddComponent<DragRotateCube>();
+                rotate.target = hitList[t];
             }
 
             // Mouse-wheel zoom — drives the display-centric rig's
@@ -162,7 +187,9 @@ public static class TransparentAutoSetup
             Debug.LogWarning("[TransparentAutoSetup] No DisplayXR rig cameras found; transparent overlay not installed.");
         else
             Debug.Log($"[TransparentAutoSetup] Alpha-native transparent overlay installed on {installed} rig camera(s)" +
-                      (targetRoot != null ? $" ('{k_TargetName}' wired as hit region)" : $" (no '{k_TargetName}' found — whole window stays clickable)"));
+                      (hit != null && hit.Length > 0
+                          ? $" ({hit.Length} object(s) wired as hit region: {string.Join(", ", System.Array.ConvertAll(hit, r => r.name))})"
+                          : $" (none of [{string.Join(", ", k_TargetNames)}] found — whole window stays clickable)"));
 
         // Stop Unity from rendering the camera mirror view to the parent
         // window's backbuffer. Without this, the parent HWND fills with a

@@ -13,7 +13,13 @@ composes the captured desktop under each tile pre-weave so anti-aliased
 silhouettes carry true soft alpha. Clicks outside the silhouette fall
 through to whatever desktop window is behind.
 
-**Render pipeline:** Built-in (BiRP).
+**Render pipeline:** `main` is Built-in (BiRP). **This branch
+(`feat/urp-transparent-clip`) is the URP consolidated variant** — URP off-axis
+projection fix (plugin v1.20.0, [#127](https://github.com/DisplayXR/displayxr-unity/issues/127)/[#129](https://github.com/DisplayXR/displayxr-unity/issues/129))
++ alpha-native transparency + per-eye foreground clip + multi-object scene
+(tiger **and** cube). If you're a partner trying this branch, jump to
+[**Partner setup (URP branch)**](#partner-setup-urp-branch) below; the BiRP
+notes elsewhere in this README describe `main`.
 
 **Sibling test projects** — each repo focuses on one feature so a regression
 in one demo doesn't mask the others:
@@ -23,6 +29,61 @@ in one demo doesn't mask the others:
 | [displayxr-unity-test](https://github.com/DisplayXR/displayxr-unity-test) | Display-centric vs camera-centric rigs, live rig switching | BiRP |
 | [displayxr-unity-test-2d-ui](https://github.com/DisplayXR/displayxr-unity-test-2d-ui) | `XrCompositionLayerWindowSpaceEXT` 2D UI overlay (`DisplayXRWindowSpaceUI`) | URP |
 | [displayxr-unity-test-transparent](https://github.com/DisplayXR/displayxr-unity-test-transparent) (you are here) | Alpha-native transparent overlay (`DisplayXRTransparentOverlay`) | BiRP |
+
+## Partner setup (URP branch)
+
+This branch (`feat/urp-transparent-clip`) is the **URP consolidated variant**:
+the URP off-axis projection fix (plugin v1.20.0) + alpha-native transparency +
+per-eye foreground clip + the multi-object scene (tiger **and** cube). Everything
+URP-side is already committed — **no manual renderer wiring, Player Settings, or
+material conversion is needed.**
+
+### Prerequisites
+
+1. **Latest DisplayXR bundle installed.** Plugin v1.20.0 hard-requires a runtime
+   that advertises `XR_EXT_view_rig` SPEC_VERSION 2 (runtime **v1.16.0+ / bundle
+   0.17.0+**) *and* the alpha-native `ALPHA_BLEND` + compose-under-background DP
+   path. Without `XR_EXT_view_rig` the plugin logs a one-shot WARN and passes raw
+   views through → **no stereo**.
+2. **Unity 6 (`6000.4.0f1`).** The project is URP 17.0.4 and the off-axis fix uses
+   URP 17 RenderGraph — it will not compile/run on older Unity/URP.
+3. **A DisplayXR / Leia eye-tracked display, with a tracked face** (sit in front of
+   the eye tracker). The per-eye foreground clip degenerates without a real face.
+
+### Steps
+
+1. Install/update the **latest DisplayXR bundle** (registers the OpenXR runtime).
+2. Clone this repo and `git checkout feat/urp-transparent-clip`.
+3. Open in **Unity 6000.4.0f1**. Let Package Manager resolve
+   `com.displayxr.unity#upm` → it should pull **v1.20.0+**. If it sticks on an
+   older cached version, delete the `com.displayxr.unity` entry from
+   `Packages/packages-lock.json` (or hit *Refresh* in Package Manager) so it
+   re-resolves.
+4. Confirm Graphics API is **Direct3D12** (committed) and the DisplayXR OpenXR
+   runtime is active.
+5. Run it: build via `unity_build.bat`, **or** *Window → DisplayXR → Preview
+   Window → Start*, **or** Play Mode.
+6. With a tracked face, move your head off-center to **both** sides (incl. far
+   left) and confirm:
+   - the image stays correct off-axis (the URP projection fix);
+   - **tiger and cube both render**;
+   - the foreground clip cuts the tiger's back half but keeps the (foreground) cube;
+   - the background is transparent and clicks fall through outside the silhouettes.
+
+### Already committed on this branch (do **not** redo)
+
+Preserve Framebuffer Alpha = on; `KooimaProjectionFixFeature` wired into the URP
+renderer; the foreground-clip Full Screen Pass feature + material; the cube's
+URP/Lit material; Graphics API = D3D12.
+
+### Troubleshooting
+
+- **Flat / no stereo** → runtime too old. Grep `Player.log`
+  (`~/AppData/LocalLow/DisplayXR/DisplayXR-test/Player.log`) for `XR_EXT_view_rig`;
+  a WARN there means the runtime lacks it → update the bundle.
+- **Magenta / missing objects** → a material didn't resolve to URP.
+- **`XR_ERROR_VALIDATION_FAILURE`** in the log → runtime lacks `ALPHA_BLEND`
+  (update the bundle).
 
 ## What's different from displayxr-unity-test
 

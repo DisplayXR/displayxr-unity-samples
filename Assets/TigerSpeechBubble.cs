@@ -3,6 +3,7 @@
 
 using DisplayXR;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 /// <summary>
@@ -39,6 +40,23 @@ public class TigerSpeechBubble : MonoBehaviour
              "client height. The tiger 3D zone fills the rest (the bottom). " +
              "0.25 matches the avatar's top-25% bubble / bottom-75% tiger.")]
     [Range(0.1f, 0.5f)] public float bubbleBandFraction = kDefaultBubbleBandFraction;
+
+    [Header("Layout editor (trimmed Ctrl+Shift+L)")]
+    [Tooltip("Hold Ctrl+Shift and press this key to toggle Layout mode, then " +
+             "drag (left button) to set the 2D/3D split line. This is the " +
+             "surviving, SR-safe half of the old Ctrl+Shift+L: the split sits " +
+             "deep-interior, away from the window frame the weaver subclass " +
+             "claims, so its mouse-downs reach us. (Window move = right-drag, " +
+             "resize = Ctrl+arrows — both elsewhere.)")]
+    public Key layoutModeKey = Key.L;
+
+    // PlayerPrefs key for the persisted split. Read by BOTH the launch seed (so
+    // the zone-sized eye RT matches the chosen split at startup) and OnEnable.
+    private const string kBandPrefKey = "dxr_bubbleBandFraction";
+
+    private bool m_LayoutMode;
+    private DragRotateCube[] m_SuspendedDrag;
+    private Text m_TitleText, m_BodyText;   // swapped to a banner in Layout mode
 
     // Canonical avatar split (top-25% bubble / bottom-75% tiger). Also used by the
     // early SubsystemRegistration seed (no scene instance exists that early, so the
@@ -86,7 +104,10 @@ public class TigerSpeechBubble : MonoBehaviour
     {
         int panelW = Screen.width  > 0 ? Screen.width  : kDefaultPanelW;
         int panelH = Screen.height > 0 ? Screen.height : kDefaultPanelH;
-        int splitY = Mathf.RoundToInt(panelH * kDefaultBubbleBandFraction);
+        // Use the persisted split (set in Layout mode) so the zone-sized eye RT
+        // matches the chosen split at launch; fall back to the avatar default.
+        float frac = PlayerPrefs.GetFloat(kBandPrefKey, kDefaultBubbleBandFraction);
+        int splitY = Mathf.RoundToInt(panelH * frac);
         splitY = Mathf.Clamp(splitY, 1, panelH - 1);
         try
         {
@@ -101,6 +122,9 @@ public class TigerSpeechBubble : MonoBehaviour
     {
         m_Font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         if (m_Font == null) m_Font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        // Restore the persisted split (matches the launch seed above).
+        bubbleBandFraction = Mathf.Clamp(
+            PlayerPrefs.GetFloat(kBandPrefKey, bubbleBandFraction), 0.1f, 0.5f);
     }
 
     void OnDisable()
@@ -129,8 +153,73 @@ public class TigerSpeechBubble : MonoBehaviour
         if (m_BubbleL2DGO == null)
             BuildUI();
 
+#if UNITY_STANDALONE_WIN
+        PollLayoutEditor();   // may update bubbleBandFraction before reflow
+#endif
         ApplyLayout();
     }
+
+#if UNITY_STANDALONE_WIN
+    // Trimmed Ctrl+Shift+L: toggle Layout mode, then left-drag to set the 2D/3D
+    // split. The split line sits deep in the interior (≈25% down), far from the
+    // window frame the SR weaver subclass claims, so its mouse-downs reach us via
+    // the plugin's polled pointer (Unity input is frozen on the cloaked HWND).
+    // Reflow is live — the bubble band and tiger zone resize as you drag, which
+    // IS the visual feedback (no separate handle needed). The change persists so
+    // the next launch's zone-sized eye RT matches the chosen split.
+    //
+    // Caveat (same as window resize): the per-eye RT is sized to the zone at
+    // LAUNCH, so a live split change stretches the tiger until the next restart,
+    // when the persisted split is applied crisply.
+    private void PollLayoutEditor()
+    {
+        if (Application.isEditor) return;
+        var kb = Keyboard.current;
+        if (kb != null)
+        {
+            bool ctrl  = kb.leftCtrlKey.isPressed  || kb.rightCtrlKey.isPressed;
+            bool shift = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
+            if (ctrl && shift && layoutModeKey != Key.None
+                && kb[layoutModeKey].wasPressedThisFrame)
+                SetLayoutMode(!m_LayoutMode);
+        }
+        if (!m_LayoutMode || m_PanelH <= 0) return;
+
+        DisplayXRNative.displayxr_get_overlay_pointer(out _, out int cy, out int buttons);
+        if ((buttons & 1) != 0 && cy >= 0)
+            bubbleBandFraction = Mathf.Clamp((float)cy / m_PanelH, 0.1f, 0.5f);
+    }
+
+    private void SetLayoutMode(bool on)
+    {
+        if (on == m_LayoutMode) return;
+        m_LayoutMode = on;
+        if (on)
+        {
+            // Suspend scene rotation so the split drag doesn't also spin the tiger.
+            m_SuspendedDrag = FindObjectsByType<DragRotateCube>(FindObjectsSortMode.None);
+            foreach (var d in m_SuspendedDrag) if (d != null) d.enabled = false;
+            // Banner in the bubble so it's obvious we're editing (the bubble +
+            // tiger also reflow live as you drag, which shows the split moving).
+            if (m_TitleText != null) m_TitleText.text = "LAYOUT MODE";
+            if (m_BodyText != null)  m_BodyText.text  =
+                "Drag up / down to set the 2D / 3D split.\nCtrl+Shift+L to exit.";
+        }
+        else
+        {
+            if (m_SuspendedDrag != null)
+                foreach (var d in m_SuspendedDrag) if (d != null) d.enabled = true;
+            m_SuspendedDrag = null;
+            if (m_TitleText != null) m_TitleText.text = title;
+            if (m_BodyText != null)  m_BodyText.text  = body;
+            // Persist the chosen split (read back by the launch seed + OnEnable).
+            PlayerPrefs.SetFloat(kBandPrefKey, bubbleBandFraction);
+            PlayerPrefs.Save();
+        }
+        Debug.Log($"[TigerSpeechBubble] Layout mode {(on ? "ON — drag to set the 2D/3D split" : "OFF")} " +
+                  $"(split={bubbleBandFraction:P0}; restart for crisp rendering at the new split)");
+    }
+#endif
 
     // Overlay client size (built transparent app), falling back to the runtime
     // render-target size, then Screen.* (editor / no overlay).
@@ -215,12 +304,12 @@ public class TigerSpeechBubble : MonoBehaviour
         m_BubbleLayout.padding = new RectOffset(48, 48, 40, 40);
         m_BubbleLayout.spacing = 10;
 
-        var t = MakeText(panelGO.transform, "Title", title, 72, FontStyle.Bold);
-        t.alignment = TextAnchor.MiddleCenter;
-        t.color = Color.white;
-        var b = MakeText(panelGO.transform, "Body", body, 48, FontStyle.Normal);
-        b.alignment = TextAnchor.MiddleCenter;
-        b.color = new Color(0.82f, 0.86f, 0.95f, 1f);
+        m_TitleText = MakeText(panelGO.transform, "Title", title, 72, FontStyle.Bold);
+        m_TitleText.alignment = TextAnchor.MiddleCenter;
+        m_TitleText.color = Color.white;
+        m_BodyText = MakeText(panelGO.transform, "Body", body, 48, FontStyle.Normal);
+        m_BodyText.alignment = TextAnchor.MiddleCenter;
+        m_BodyText.color = new Color(0.82f, 0.86f, 0.95f, 1f);
     }
 
     // ----------------------------------------------------------- layout/apply ---
@@ -236,7 +325,13 @@ public class TigerSpeechBubble : MonoBehaviour
         // --- 2D bubble band (top): place the Local2D layer + union it into the
         // click-through region (it sits outside the tiger silhouette).
         m_BubbleL2D.SetExplicitRect(0, 0, m_PanelW, splitY);
-        PushSurroundRect(0, 0, m_PanelW, splitY);
+        // In Layout mode, make the WHOLE window catch clicks (union a full-window
+        // surround rect) so the split drag registers anywhere interior, not just
+        // over the bubble/tiger. Normal mode unions only the bubble band.
+        if (m_LayoutMode)
+            PushSurroundRect(0, 0, m_PanelW, m_PanelH);
+        else
+            PushSurroundRect(0, 0, m_PanelW, splitY);
 
         // --- 3D tiger zone (bottom): the runtime Kooima-frames the tiger here.
         var zone = new RectInt(0, splitY, m_PanelW, m_PanelH - splitY);

@@ -74,6 +74,15 @@ public class DemoWindowController : MonoBehaviour
     public const string kWinHPref = "dxr_winH";
     public const string kWinXPref = "dxr_winX";
     public const string kWinYPref = "dxr_winY";
+    // Shipped default layout = the tuned layout saved on the dev machine, so a
+    // fresh install (cleared PlayerPrefs / partner machine) starts here. Per-user
+    // changes still persist on top. NOTE position is monitor-relative — on a
+    // different display setup it may land off-screen until the user moves it
+    // (which then persists).
+    private const int kDefaultW = 840;
+    private const int kDefaultH = 1448;
+    private const int kDefaultX = 2876;
+    private const int kDefaultY = 673;
     private int m_LastW = -1, m_LastH = -1, m_LastX = int.MinValue, m_LastY = int.MinValue;
     private bool m_Restored;
 
@@ -105,19 +114,17 @@ public class DemoWindowController : MonoBehaviour
             if (!m_Restored)
             {
                 m_Restored = true;
-                int wantW = PlayerPrefs.GetInt(kWinWPref, curW);
-                int wantH = PlayerPrefs.GetInt(kWinHPref, curH);
+                // Fall back to the shipped default layout (not the born size/spot)
+                // so a fresh install starts at the tuned layout.
+                int wantW = PlayerPrefs.GetInt(kWinWPref, kDefaultW);
+                int wantH = PlayerPrefs.GetInt(kWinHPref, kDefaultH);
                 if (wantW != curW || wantH != curH)
                     DisplayXRNative.displayxr_resize_overlay(
                         Mathf.Max(minWindowPx, wantW), Mathf.Max(minWindowPx, wantH));
-                // Restore position only if one was saved (else keep the born spot).
-                if (PlayerPrefs.HasKey(kWinXPref) && PlayerPrefs.HasKey(kWinYPref))
-                {
-                    int wantX = PlayerPrefs.GetInt(kWinXPref, curX);
-                    int wantY = PlayerPrefs.GetInt(kWinYPref, curY);
-                    if (wantX != curX || wantY != curY)
-                        DisplayXRNative.displayxr_set_overlay_position(wantX, wantY);
-                }
+                int wantX = PlayerPrefs.GetInt(kWinXPref, kDefaultX);
+                int wantY = PlayerPrefs.GetInt(kWinYPref, kDefaultY);
+                if (wantX != curX || wantY != curY)
+                    DisplayXRNative.displayxr_set_overlay_position(wantX, wantY);
             }
             else
             {

@@ -61,11 +61,14 @@ public class TigerSpeechBubble : MonoBehaviour
     // Canonical avatar split (top-25% bubble / bottom-75% tiger). Also used by the
     // early SubsystemRegistration seed (no scene instance exists that early, so the
     // launch zone must be derived from a constant).
-    private const float kDefaultBubbleBandFraction = 0.25f;
-    // ProjectSettings born-windowed default (1000x1500) — fallback when Screen.* is
+    // Shipped default layout = the tuned layout saved on the dev machine (so a
+    // fresh install / partner starts here, not at the avatar 0.25 / 1000x1500).
+    // Per-user changes still persist on top via PlayerPrefs.
+    private const float kDefaultBubbleBandFraction = 0.33f;
+    // ProjectSettings born-windowed default (840x1448) — fallback when Screen.* is
     // not yet populated at SubsystemRegistration time.
-    private const int kDefaultPanelW = 1000;
-    private const int kDefaultPanelH = 1500;
+    private const int kDefaultPanelW = 840;
+    private const int kDefaultPanelH = 1448;
 
     private Font m_Font;
     private int m_PanelW, m_PanelH;     // real window client size (px)

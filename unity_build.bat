@@ -7,6 +7,12 @@ REM  scenes listed in Build Settings to Builds\Win64\<exe>, writing
 REM  a log to Logs\unity_build.log. This is the headless equivalent
 REM  of File > Build Settings > Build.
 REM
+REM  Usage:   unity_build.bat [OUT_DIR]
+REM    OUT_DIR  Optional. Destination folder for the player (the exe and
+REM             its _Data/dll sidecars go here). May be absolute or relative
+REM             to the project root. Defaults to
+REM             Builds\Win64\DisplayXR-test-transparent.
+REM
 REM  Override the editor path:  set UNITY_PATH=C:\path\to\Unity.exe
 REM ============================================================
 setlocal
@@ -19,8 +25,14 @@ if "%PROJECT_PATH:~-1%"=="\" set "PROJECT_PATH=%PROJECT_PATH:~0,-1%"
 
 REM Build into a named subfolder (NOT loose in Win64) so the player and its
 REM _Data/dll sidecars stay self-contained — matches installer\build-installer.bat
-REM (BIN_DIR = Builds\Win64\DisplayXR-test-transparent, exe = DisplayXR-test.exe).
-set "OUT_DIR=%PROJECT_PATH%\Builds\Win64\DisplayXR-test-transparent"
+REM (default exe = DisplayXR-test.exe). The destination folder can be passed as
+REM the first argument; a relative path is resolved against the project root.
+set "OUT_DIR=%~1"
+if "%OUT_DIR%"=="" set "OUT_DIR=%PROJECT_PATH%\Builds\Win64\DisplayXR-test-transparent"
+REM Normalize to an absolute path; a relative arg resolves against the project root.
+pushd "%PROJECT_PATH%"
+for %%I in ("%OUT_DIR%") do set "OUT_DIR=%%~fI"
+popd
 set "OUT_EXE=%OUT_DIR%\DisplayXR-test.exe"
 set "LOG=%PROJECT_PATH%\Logs\unity_build.log"
 

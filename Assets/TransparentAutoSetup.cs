@@ -8,6 +8,7 @@
 
 using UnityEngine;
 using UnityEngine.XR;
+using UnityEngine.InputSystem;
 using DisplayXR;
 
 public static class TransparentAutoSetup
@@ -240,9 +241,30 @@ public class WheelZoomVHeight : MonoBehaviour
     public float minVHeight = 0.05f;
     public float maxVHeight = 5.0f;
 
+    [Tooltip("Key that resets the zoom (vHeight) to its startup value. Matches " +
+             "DisplayXRInputController's Space reset, which restores pose/scale " +
+             "but NOT the display rig's vHeight.")]
+    public Key resetKey = Key.Space;
+
+    private float m_InitialVHeight;
+    private bool m_CapturedInitial;
+
     void Update()
     {
         if (overlay == null || rig == null) return;
+
+        // Capture the resting vHeight once so Space can restore it.
+        if (!m_CapturedInitial)
+        {
+            m_InitialVHeight = rig.virtualDisplayHeight;
+            m_CapturedInitial = true;
+        }
+
+        // Space resets the zoom (vHeight). Done before the active-rig gate so
+        // this rig's zoom resets even if another rig is currently active.
+        var kb = Keyboard.current;
+        if (kb != null && resetKey != Key.None && kb[resetKey].wasPressedThisFrame)
+            rig.virtualDisplayHeight = m_InitialVHeight;
 
         // Multi-rig gate: only the active rig drains the wheel accumulator.
         // ActiveCamera comes from the DisplayXRRigManager static registry —

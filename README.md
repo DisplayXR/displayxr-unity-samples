@@ -14,12 +14,18 @@ silhouettes carry true soft alpha. Clicks outside the silhouette fall
 through to whatever desktop window is behind.
 
 **Render pipeline:** `main` is Built-in (BiRP). **This branch
-(`feat/urp-transparent-clip`) is the URP consolidated variant** — URP off-axis
-projection fix (plugin v1.20.0, [#127](https://github.com/DisplayXR/displayxr-unity/issues/127)/[#129](https://github.com/DisplayXR/displayxr-unity/issues/129))
-+ alpha-native transparency + per-eye foreground clip + multi-object scene
-(tiger **and** cube). If you're a partner trying this branch, jump to
-[**Partner setup (URP branch)**](#partner-setup-urp-branch) below; the BiRP
-notes elsewhere in this README describe `main`.
+(`feat/urp-transparent-clip`) is the URP consolidated + display-zones variant**
+(plugin **v1.21.0+**) — URP off-axis projection fix
+([#127](https://github.com/DisplayXR/displayxr-unity/issues/127)/[#129](https://github.com/DisplayXR/displayxr-unity/issues/129))
++ alpha-native transparency + per-eye foreground clip + a **`XR_EXT_display_zones`
+layout**: the tiger is Kooima-projected into a 3D zone and a **Local2D speech
+bubble** ([#439](https://github.com/DisplayXR/displayxr-unity/issues/439)/[#491](https://github.com/DisplayXR/displayxr-unity/issues/491))
+sits in the adjacent 2D band, in a **real floating window** you can move, resize,
+and flip 2D⇄3D from the keyboard. See [**Controls**](#controls) for the full key
+map (it differs from the older 2D-surround / in-app region-editor build —
+archived at tag `archive/urp-transparent-clip-pre-local2d`). If you're a partner
+trying this branch, jump to [**Partner setup (URP branch)**](#partner-setup-urp-branch);
+the BiRP notes elsewhere describe `main`.
 
 **Sibling test projects** — each repo focuses on one feature so a regression
 in one demo doesn't mask the others:
@@ -32,19 +38,25 @@ in one demo doesn't mask the others:
 
 ## Partner setup (URP branch)
 
-This branch (`feat/urp-transparent-clip`) is the **URP consolidated variant**:
-the URP off-axis projection fix (plugin v1.20.0) + alpha-native transparency +
-per-eye foreground clip + the multi-object scene (tiger **and** cube). Everything
-URP-side is already committed — **no manual renderer wiring, Player Settings, or
-material conversion is needed.**
+This branch (`feat/urp-transparent-clip`) is the **URP consolidated +
+display-zones variant**: the URP off-axis projection fix (plugin **v1.21.0+**) +
+alpha-native transparency + per-eye foreground clip + the multi-object scene
+(tiger **and** cube) + the `XR_EXT_display_zones` 3D-zone / Local2D-bubble layout
+in a real floating window. Everything URP-side is already committed — **no manual
+renderer wiring, Player Settings, or material conversion is needed.**
 
 ### Prerequisites
 
-1. **Latest DisplayXR bundle installed.** Plugin v1.20.0 hard-requires a runtime
-   that advertises `XR_EXT_view_rig` SPEC_VERSION 2 (runtime **v1.16.0+ / bundle
-   0.17.0+**) *and* the alpha-native `ALPHA_BLEND` + compose-under-background DP
-   path. Without `XR_EXT_view_rig` the plugin logs a one-shot WARN and passes raw
-   views through → **no stereo**.
+1. **Latest DisplayXR bundle installed.** Plugin **v1.21.0** hard-requires a
+   runtime that advertises `XR_EXT_view_rig` SPEC_VERSION 2, `XR_EXT_display_zones`,
+   `XR_EXT_local_3d_zone`, and `XR_EXT_display_info` *and* the alpha-native
+   `ALPHA_BLEND` + compose-under-background DP path — i.e. runtime **v1.22.0+**
+   (hardware-verified on runtime v1.22.0 / leia-sr 1.8.3). Without these the plugin
+   logs a one-shot WARN and passes raw views through → **no stereo / no zones**.
+   *(Note: the smooth V-key 2D⇄3D switch needs the runtime fix for
+   [#615](https://github.com/DisplayXR/displayxr-runtime/issues/615), which is on
+   runtime `main` but not yet in a release as of v1.22.0 — until then the 2D→3D
+   transition snaps; everything else works on v1.22.0.)*
 2. **Unity 6 (`6000.4.0f1`).** The project is URP 17.0.4 and the off-axis fix uses
    URP 17 RenderGraph — it will not compile/run on older Unity/URP.
 3. **A DisplayXR / Leia eye-tracked display, with a tracked face** (sit in front of
@@ -55,7 +67,7 @@ material conversion is needed.**
 1. Install/update the **latest DisplayXR bundle** (registers the OpenXR runtime).
 2. Clone this repo and `git checkout feat/urp-transparent-clip`.
 3. Open in **Unity 6000.4.0f1**. Let Package Manager resolve
-   `com.displayxr.unity#upm` → it should pull **v1.20.0+**. If it sticks on an
+   `com.displayxr.unity#upm` → it should pull **v1.21.0+**. If it sticks on an
    older cached version, delete the `com.displayxr.unity` entry from
    `Packages/packages-lock.json` (or hit *Refresh* in Package Manager) so it
    re-resolves.
@@ -84,6 +96,77 @@ URP/Lit material; Graphics API = D3D12.
 - **Magenta / missing objects** → a material didn't resolve to URP.
 - **`XR_ERROR_VALIDATION_FAILURE`** in the log → runtime lacks `ALPHA_BLEND`
   (update the bundle).
+
+## Controls
+
+The app runs as a **real floating window** (born windowed; size/position/split
+persist across launches). All bindings below are **app policy** — they live in
+the demo's `Assets/` scripts, not the plugin (the plugin only exposes window
+*primitives*; the demo decides the keys). Edit them freely.
+
+> **Changed from the older build.** The archived `archive/urp-transparent-clip-pre-local2d`
+> tag used a *fixed-fullscreen overlay with an in-app virtual-window region
+> editor* (the full Ctrl+Shift+L dragged virtual window edges to resize/move
+> *inside* a fullscreen overlay, with a 2D surround). This build is a genuine
+> OS floating window instead, so **move/resize moved to direct window controls**
+> and Ctrl+Shift+L is trimmed to only the 2D/3D split. The table below is the
+> current, authoritative map.
+
+### Window management
+
+| Action | Control | Notes |
+|---|---|---|
+| **Move window** | **Right-mouse drag** (anywhere on the tiger / interior) | Capture-based `SetWindowPos`; the only drag the Leia SR weaver doesn't eat. |
+| **Resize window** | **Ctrl + arrow keys** | →/← = width, ↑/↓ = height, 80 px per press. |
+| **Quit** | **Esc** (also the window **X** button / **Alt+F4**) | — |
+
+> **Why keyboard resize, not mouse-drag edges?** The Leia SR weaver installs a
+> WndProc subclass on the overlay HWND and **swallows mouse button-downs near the
+> window frame** (the overlay must stay non-activating so Unity keeps input
+> focus). Every mouse-edge resize approach dies on that, so resize is keyboard
+> (`displayxr_resize_overlay`, a direct `SetWindowPos` that's never intercepted —
+> the same mechanism right-drag MOVE uses). There is no OS title bar by design.
+
+### Display / render mode
+
+| Action | Control | Notes |
+|---|---|---|
+| **Toggle 3D ⇄ 2D** | **V** | Only while the app is focused ("tiger in focus", not clicked-through). Ramps the rig **IPD** smoothly (parallax stays 1, so the head-tracked perspective is kept). The 2D→3D direction still snaps until the runtime ships the [#615](https://github.com/DisplayXR/displayxr-runtime/issues/615) fix. |
+
+### Scene navigation
+
+| Action | Control |
+|---|---|
+| Move horizontally | **W / A / S / D** |
+| Move down / up | **Q / E** |
+| Cycle cameras / rigs | **Tab** |
+
+*(Mouse-look and scroll-zoom on the rig controller are disabled in this demo —
+left-drag and the wheel are reserved for the tiger, below.)*
+
+### Tiger interaction
+
+| Action | Control | Notes |
+|---|---|---|
+| **Rotate the tiger** | **Left-mouse drag** on the tiger | Yaw only (stays upright); pauses the idle animation while dragging. |
+| **Zoom** | **Mouse wheel** | Scales the rig's virtual display height ("zoom in window" — the window itself stays put). |
+| **Reset** | **Space** | Restores the tiger's orientation **and** the zoom (vHeight) to startup. |
+| Click the tiger | **Left click** on the silhouette | Reaches Unity (logs `onPointerClick`). Clicks on the transparent area fall through to the desktop window behind. |
+
+### Layout (2D / 3D split)
+
+| Action | Control | Notes |
+|---|---|---|
+| **Toggle Layout mode** | **Ctrl + Shift + L** | The bubble shows a "LAYOUT MODE" banner and tiger rotation is suspended. |
+| **Set the split** | **Left-drag up / down** (in Layout mode) | Moves the 2D-band / 3D-zone divider; press **Ctrl+Shift+L** again to exit. The split persists across launches. |
+
+### Persistence & defaults
+
+Window **size**, **position**, and the **2D/3D split** are saved to PlayerPrefs
+and restored on the next launch. A fresh install (cleared PlayerPrefs) starts at
+the tuned shipped default: **840 × 1448** at screen **(2876, 673)**, split at
+**0.33**. (Position is monitor-relative — on a different display layout it may
+land off-screen until you move it once, which then persists.)
 
 ## What's different from displayxr-unity-test
 

@@ -51,10 +51,12 @@ ShowUninstDetails show
 !include "WordFunc.nsh"
 !insertmacro VersionCompare
 
-; Minimum runtime version. The gaussiansplat reference installer already
-; uses 1.3.0 for its transparent-bg path (XR_TRUE on session create), so
-; the same floor works for the alpha-native overlay test here.
-!define MIN_RUNTIME_VERSION "1.3.0"
+; Minimum runtime version. The URP / display-zones build (v2.0.0) needs a
+; runtime that advertises XR_EXT_view_rig SPEC 2, XR_EXT_display_zones,
+; XR_EXT_local_3d_zone and XR_EXT_display_info plus the alpha-native ALPHA_BLEND
+; compose-under-bg DP path — i.e. runtime 1.22.0+ (hardware-verified on 1.22.0).
+; Older runtimes fall back to raw passthrough (no stereo / no zones).
+!define MIN_RUNTIME_VERSION "1.22.0"
 
 ;--------------------------------
 ; UI

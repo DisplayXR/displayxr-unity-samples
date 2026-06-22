@@ -13,8 +13,7 @@ composes the captured desktop under each tile pre-weave so anti-aliased
 silhouettes carry true soft alpha. Clicks outside the silhouette fall
 through to whatever desktop window is behind.
 
-**Render pipeline:** `main` is Built-in (BiRP). **This branch
-(`feat/urp-transparent-clip`) is the URP consolidated + display-zones variant**
+**Render pipeline:** `main` is the **URP consolidated + display-zones variant**
 (plugin **v1.21.0+**) — URP off-axis projection fix
 ([#127](https://github.com/DisplayXR/displayxr-unity/issues/127)/[#129](https://github.com/DisplayXR/displayxr-unity/issues/129))
 + alpha-native transparency + per-eye foreground clip + a **`XR_EXT_display_zones`
@@ -22,10 +21,10 @@ layout**: the tiger is Kooima-projected into a 3D zone and a **Local2D speech
 bubble** ([#439](https://github.com/DisplayXR/displayxr-unity/issues/439)/[#491](https://github.com/DisplayXR/displayxr-unity/issues/491))
 sits in the adjacent 2D band, in a **real floating window** you can move, resize,
 and flip 2D⇄3D from the keyboard. See [**Controls**](#controls) for the full key
-map (it differs from the older 2D-surround / in-app region-editor build —
-archived at tag `archive/urp-transparent-clip-pre-local2d`). If you're a partner
-trying this branch, jump to [**Partner setup (URP branch)**](#partner-setup-urp-branch);
-the BiRP notes elsewhere describe `main`.
+map. The earlier **Built-in (BiRP)** transparent-overlay variant lives on the
+**`legacy-birp`** branch (the older 2D-surround / in-app region-editor build is
+also retrievable at tag `archive/urp-transparent-clip-pre-local2d`). If you're a
+partner setting this up, jump to [**Partner setup**](#partner-setup).
 
 **Sibling test projects** — each repo focuses on one feature so a regression
 in one demo doesn't mask the others:
@@ -34,16 +33,16 @@ in one demo doesn't mask the others:
 |---|---|---|
 | [displayxr-unity-test](https://github.com/DisplayXR/displayxr-unity-test) | Display-centric vs camera-centric rigs, live rig switching | BiRP |
 | [displayxr-unity-test-2d-ui](https://github.com/DisplayXR/displayxr-unity-test-2d-ui) | `XrCompositionLayerWindowSpaceEXT` 2D UI overlay (`DisplayXRWindowSpaceUI`) | URP |
-| [displayxr-unity-test-transparent](https://github.com/DisplayXR/displayxr-unity-test-transparent) (you are here) | Alpha-native transparent overlay (`DisplayXRTransparentOverlay`) | BiRP |
+| [displayxr-unity-test-transparent](https://github.com/DisplayXR/displayxr-unity-test-transparent) (you are here) | Alpha-native transparent overlay (`DisplayXRTransparentOverlay`) + display zones / Local2D bubble | URP (`main`); BiRP on `legacy-birp` |
 
-## Partner setup (URP branch)
+## Partner setup
 
-This branch (`feat/urp-transparent-clip`) is the **URP consolidated +
-display-zones variant**: the URP off-axis projection fix (plugin **v1.21.0+**) +
-alpha-native transparency + per-eye foreground clip + the multi-object scene
-(tiger **and** cube) + the `XR_EXT_display_zones` 3D-zone / Local2D-bubble layout
-in a real floating window. Everything URP-side is already committed — **no manual
-renderer wiring, Player Settings, or material conversion is needed.**
+`main` is the **URP consolidated + display-zones variant**: the URP off-axis
+projection fix (plugin **v1.21.0+**) + alpha-native transparency + per-eye
+foreground clip + the multi-object scene (tiger **and** cube) + the
+`XR_EXT_display_zones` 3D-zone / Local2D-bubble layout in a real floating window.
+Everything URP-side is already committed — **no manual renderer wiring, Player
+Settings, or material conversion is needed.**
 
 ### Prerequisites
 
@@ -65,7 +64,7 @@ renderer wiring, Player Settings, or material conversion is needed.**
 ### Steps
 
 1. Install/update the **latest DisplayXR bundle** (registers the OpenXR runtime).
-2. Clone this repo and `git checkout feat/urp-transparent-clip`.
+2. Clone this repo (the default `main` branch is the URP/zones build).
 3. Open in **Unity 6000.4.0f1**. Let Package Manager resolve
    `com.displayxr.unity#upm` → it should pull **v1.21.0+**. If it sticks on an
    older cached version, delete the `com.displayxr.unity` entry from
@@ -82,7 +81,7 @@ renderer wiring, Player Settings, or material conversion is needed.**
    - the foreground clip cuts the tiger's back half but keeps the (foreground) cube;
    - the background is transparent and clicks fall through outside the silhouettes.
 
-### Already committed on this branch (do **not** redo)
+### Already committed on `main` (do **not** redo)
 
 Preserve Framebuffer Alpha = on; `KooimaProjectionFixFeature` wired into the URP
 renderer; the foreground-clip Full Screen Pass feature + material; the cube's

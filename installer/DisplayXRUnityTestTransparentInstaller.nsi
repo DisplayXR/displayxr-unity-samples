@@ -109,7 +109,7 @@ Section "DisplayXR Unity Test (Transparent)" SecApp
     SetRegView 64
     SetShellVarContext all
 
-    nsExec::ExecToLog 'taskkill /f /im DisplayXR-test.exe'
+    nsExec::ExecToLog 'taskkill /f /im DisplayXR-test-transparent.exe'
     Pop $0
 
     SetOutPath "$INSTDIR"
@@ -137,7 +137,7 @@ Section "DisplayXR Unity Test (Transparent)" SecApp
     FileWrite $0 '  "icon_3d": "icon_sbs_unity_test_transparent.png",$\r$\n'
     FileWrite $0 '  "icon_3d_layout": "sbs-lr",$\r$\n'
     ${WordReplace} "$INSTDIR" "\" "/" "+" $1
-    FileWrite $0 '  "exe_path": "$1/DisplayXR-test.exe"$\r$\n'
+    FileWrite $0 '  "exe_path": "$1/DisplayXR-test-transparent.exe"$\r$\n'
     FileWrite $0 '}$\r$\n'
     FileClose $0
 
@@ -155,7 +155,7 @@ Section "DisplayXR Unity Test (Transparent)" SecApp
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DisplayXRUnityTestTransparent" \
         "InstallLocation" "$INSTDIR"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DisplayXRUnityTestTransparent" \
-        "DisplayIcon" "$INSTDIR\DisplayXR-test.exe"
+        "DisplayIcon" "$INSTDIR\DisplayXR-test-transparent.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DisplayXRUnityTestTransparent" \
         "Publisher" "DisplayXR"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DisplayXRUnityTestTransparent" \
@@ -178,8 +178,8 @@ Section "Start Menu Shortcut" SecShortcut
     SetShellVarContext all
     CreateDirectory "$SMPROGRAMS\DisplayXR"
     CreateShortCut "$SMPROGRAMS\DisplayXR\DisplayXR Unity Test (Transparent).lnk" \
-        "$INSTDIR\DisplayXR-test.exe" "" \
-        "$INSTDIR\DisplayXR-test.exe" 0
+        "$INSTDIR\DisplayXR-test-transparent.exe" "" \
+        "$INSTDIR\DisplayXR-test-transparent.exe" 0
 SectionEnd
 
 ;--------------------------------
@@ -189,7 +189,7 @@ Section "Uninstall"
     SetRegView 64
     SetShellVarContext all
 
-    nsExec::ExecToLog 'taskkill /f /im DisplayXR-test.exe'
+    nsExec::ExecToLog 'taskkill /f /im DisplayXR-test-transparent.exe'
     Pop $0
 
     Delete "$APPDATA\DisplayXR\apps\unity_test_transparent.displayxr.json"

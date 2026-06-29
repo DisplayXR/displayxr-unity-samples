@@ -9,8 +9,8 @@ if "%VERSION_MAJOR%"=="" set "VERSION_MAJOR=2"
 if "%VERSION_MINOR%"=="" set "VERSION_MINOR=0"
 if "%VERSION_PATCH%"=="" set "VERSION_PATCH=0"
 
-if not exist "%BIN_DIR%\DisplayXR-test.exe" (
-    echo ERROR: Unity Player build not found at %BIN_DIR%\DisplayXR-test.exe
+if not exist "%BIN_DIR%\DisplayXR-test-transparent.exe" (
+    echo ERROR: Unity Player build not found at %BIN_DIR%\DisplayXR-test-transparent.exe
     echo Open the project in Unity and run File ^> Build Settings ^> Build, targeting Builds\Win64\DisplayXR-test\.
     exit /b 1
 )

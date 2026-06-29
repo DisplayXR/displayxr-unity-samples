@@ -107,7 +107,7 @@ Section "DisplayXR Unity Test (2D UI)" SecApp
     SetRegView 64
     SetShellVarContext all
 
-    nsExec::ExecToLog 'taskkill /f /im DisplayXR-test.exe'
+    nsExec::ExecToLog 'taskkill /f /im DisplayXR-test-2d-ui.exe'
     Pop $0
 
     SetOutPath "$INSTDIR"
@@ -135,7 +135,7 @@ Section "DisplayXR Unity Test (2D UI)" SecApp
     FileWrite $0 '  "icon_3d": "icon_sbs_unity_test_2d_ui.png",$\r$\n'
     FileWrite $0 '  "icon_3d_layout": "sbs-lr",$\r$\n'
     ${WordReplace} "$INSTDIR" "\" "/" "+" $1
-    FileWrite $0 '  "exe_path": "$1/DisplayXR-test.exe"$\r$\n'
+    FileWrite $0 '  "exe_path": "$1/DisplayXR-test-2d-ui.exe"$\r$\n'
     FileWrite $0 '}$\r$\n'
     FileClose $0
 
@@ -153,7 +153,7 @@ Section "DisplayXR Unity Test (2D UI)" SecApp
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DisplayXRUnityTest2DUI" \
         "InstallLocation" "$INSTDIR"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DisplayXRUnityTest2DUI" \
-        "DisplayIcon" "$INSTDIR\DisplayXR-test.exe"
+        "DisplayIcon" "$INSTDIR\DisplayXR-test-2d-ui.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DisplayXRUnityTest2DUI" \
         "Publisher" "DisplayXR"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DisplayXRUnityTest2DUI" \
@@ -176,8 +176,8 @@ Section "Start Menu Shortcut" SecShortcut
     SetShellVarContext all
     CreateDirectory "$SMPROGRAMS\DisplayXR"
     CreateShortCut "$SMPROGRAMS\DisplayXR\DisplayXR Unity Test (2D UI).lnk" \
-        "$INSTDIR\DisplayXR-test.exe" "" \
-        "$INSTDIR\DisplayXR-test.exe" 0
+        "$INSTDIR\DisplayXR-test-2d-ui.exe" "" \
+        "$INSTDIR\DisplayXR-test-2d-ui.exe" 0
 SectionEnd
 
 ;--------------------------------
@@ -187,7 +187,7 @@ Section "Uninstall"
     SetRegView 64
     SetShellVarContext all
 
-    nsExec::ExecToLog 'taskkill /f /im DisplayXR-test.exe'
+    nsExec::ExecToLog 'taskkill /f /im DisplayXR-test-2d-ui.exe'
     Pop $0
 
     Delete "$APPDATA\DisplayXR\apps\unity_test_2d_ui.displayxr.json"

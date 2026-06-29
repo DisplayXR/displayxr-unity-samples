@@ -19,9 +19,9 @@ if "%PROJECT_PATH:~-1%"=="\" set "PROJECT_PATH=%PROJECT_PATH:~0,-1%"
 
 REM Build into a named subfolder (NOT loose in Win64) so the player and its
 REM _Data/dll sidecars stay self-contained — matches installer\build-installer.bat
-REM (BIN_DIR = Builds\Win64\DisplayXR-test-2d-ui, exe = DisplayXR-test.exe).
+REM (BIN_DIR = Builds\Win64\DisplayXR-test-2d-ui, exe = DisplayXR-test-2d-ui.exe).
 set "OUT_DIR=%PROJECT_PATH%\Builds\Win64\DisplayXR-test-2d-ui"
-set "OUT_EXE=%OUT_DIR%\DisplayXR-test.exe"
+set "OUT_EXE=%OUT_DIR%\DisplayXR-test-2d-ui.exe"
 set "LOG=%PROJECT_PATH%\Logs\unity_build.log"
 
 if not exist "%UNITY_PATH%" (

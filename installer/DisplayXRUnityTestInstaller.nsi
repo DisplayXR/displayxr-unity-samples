@@ -1,6 +1,6 @@
 ; DisplayXR Unity Test — Windows Installer
 ; Copyright 2026, DisplayXR
-; SPDX-License-Identifier: BSL-1.0
+; SPDX-License-Identifier: Apache-2.0
 ;
 ; Build: makensis /DVERSION=1.7.0 /DBIN_DIR=<unity-build-dir> /DSOURCE_DIR=<repo-root> /DOUTPUT_DIR=<output-dir> DisplayXRUnityTestInstaller.nsi
 ;

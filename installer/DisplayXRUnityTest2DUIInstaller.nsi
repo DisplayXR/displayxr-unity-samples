@@ -54,7 +54,7 @@ ShowUninstDetails show
 ; Minimum runtime version. Matches the gaussiansplat reference installer
 ; floor (1.3.0). Window-space composition layer support has been in the
 ; runtime since this stamp.
-!define MIN_RUNTIME_VERSION "1.3.0"
+!define MIN_RUNTIME_VERSION "1.26.1"
 
 ;--------------------------------
 ; UI

@@ -38,6 +38,11 @@ public class DisplayXRTuningUI : MonoBehaviour
     [Range(0f, 1f)] public float panelHeight = 0.32f;
     [Range(-0.05f, 0.05f)] public float disparity;
 
+    [Header("2D/3D transition")]
+    [Tooltip("Seconds to ease the stereo disparity across a 2D<->3D switch " +
+             "(the shared DisplayXRModeSwitch ramp). 0 = instant. Provider mode only.")]
+    public float modeTransitionSeconds = 0.18f;
+
     // Slider ranges/defaults are constants so scene-serialized values from
     // earlier versions can't override the canonical spec.
     private const float kIpdMin = 0.0f;
@@ -90,7 +95,16 @@ public class DisplayXRTuningUI : MonoBehaviour
     private uint[] m_ModeIndices;
     private string[] m_ModeNames;
     private bool[] m_ModeIs3D;
+    private uint[] m_ModeViewCounts;
+    private bool[] m_ModeRequestable;
     private int m_CurrentModeArrayIdx = -1;
+
+    // Provider mode (built app, epic #166): the standalone rendering-mode API is
+    // inert (no standalone session), so drive DisplayXRProvider + the shared smooth
+    // 2D<->3D sequencer (ported from displayxr-common, matches the runtime test apps).
+    private readonly DisplayXR.DisplayXRModeSwitch m_ModeSwitch = new DisplayXR.DisplayXRModeSwitch();
+    private bool m_ProviderMode;
+    private bool m_PrevVKb;   // edge-detect Keyboard.current 'V' in the built app
 
     void OnEnable()
     {
@@ -275,8 +289,29 @@ public class DisplayXRTuningUI : MonoBehaviour
             wsui.disparity = disparity;
         }
 
-        // Mode list may not be ready until the standalone session has begun.
-        if (m_ModeNames == null) TryEnumerateModes();
+        // Mode list may not be ready until the session has begun.
+        if (m_ModeNames == null || (m_ProviderMode && m_ModeNames.Length == 0)) TryEnumerateModes();
+
+        // Provider mode (built app): drive the smooth 2D<->3D sequencer every frame —
+        // push its ramped ipdFactor onto the rig and fire the runtime mode request on
+        // the frame it signals. Also keep the label synced to the active mode so it
+        // reflects switches from any source (button, V key, shell).
+        if (m_ProviderMode)
+        {
+            float ipd = m_ModeSwitch.Update(Time.deltaTime, out bool fire, out uint mode);
+            if (m_ModeSwitch.Active && displayRig != null) displayRig.ipdFactor = ipd;
+            if (fire && mode != DisplayXRProvider.ActiveModeIndex)
+                DisplayXRProvider.RequestRenderingMode(mode);
+            SyncProviderModeLabel();
+
+            // Built-app V key via the Input System (reaches Unity through the provider
+            // focus hook). Edge-detected. The standalone preview-input V below is a
+            // no-op in a built player, so this is the active path here.
+            var kbV = Keyboard.current;
+            bool vKb = kbV != null && kbV.vKey.isPressed;
+            if (vKb && !m_PrevVKb) CycleRenderMode();
+            m_PrevVKb = vKb;
+        }
 
         // V key cycles render modes — same action as the on-screen button.
         // Polled via DisplayXRPreviewInput.IsKeyPressed which reads OS hardware
@@ -305,6 +340,14 @@ public class DisplayXRTuningUI : MonoBehaviour
 
     void TryEnumerateModes()
     {
+        // Provider mode (built app): the standalone enumerate API is inert (no
+        // standalone session). Read the modes from DisplayXRProvider instead.
+        if (DisplayXRProviderDriver.IsActive)
+        {
+            TryEnumerateModesProvider();
+            return;
+        }
+
         const uint kCapacity = 16;
         try
         {
@@ -369,6 +412,70 @@ public class DisplayXRTuningUI : MonoBehaviour
         catch (System.EntryPointNotFoundException) { /* old plugin — ignore */ }
     }
 
+    // Provider-mode enumeration: pull the mode list from DisplayXRProvider (the
+    // native provider already enumerated them). Names come straight from the runtime.
+    void TryEnumerateModesProvider()
+    {
+        var modes = DisplayXRProvider.Modes;
+        if (modes == null || modes.Count == 0) { DisplayXRProvider.RefreshModes(); modes = DisplayXRProvider.Modes; }
+        if (modes == null || modes.Count == 0) return; // session not ready yet — retry from Update
+
+        int count = modes.Count;
+        m_ModeIndices = new uint[count];
+        m_ModeNames = new string[count];
+        m_ModeIs3D = new bool[count];
+        m_ModeViewCounts = new uint[count];
+        m_ModeRequestable = new bool[count];
+        for (int i = 0; i < count; i++)
+        {
+            var m = modes[i];
+            m_ModeIndices[i] = m.modeIndex;
+            m_ModeIs3D[i] = m.hardwareDisplay3D != 0;
+            m_ModeViewCounts[i] = m.viewCount;
+            m_ModeRequestable[i] = m.isRequestable != 0;
+            m_ModeNames[i] = string.IsNullOrEmpty(m.name)
+                ? SynthesizeModeName(m.modeIndex, m.hardwareDisplay3D != 0, m.tileColumns, m.tileRows, m.viewCount)
+                : m.name;
+        }
+        m_ProviderMode = true;
+        SyncProviderModeLabel();
+        m_ModeSwitch.Configure(modeTransitionSeconds); // per-app ramp duration (default 0.18s)
+    }
+
+    // Map DisplayXRProvider.ActiveModeIndex → our array slot and update the label.
+    // Runs every frame in provider mode so the label tracks external switches too
+    // (e.g. a shell-initiated 2D/3D toggle, or the V key).
+    void SyncProviderModeLabel()
+    {
+        if (m_ModeIndices == null) return;
+        uint active = DisplayXRProvider.ActiveModeIndex;
+        for (int i = 0; i < m_ModeIndices.Length; i++)
+            if (m_ModeIndices[i] == active) { m_CurrentModeArrayIdx = i; break; }
+        UpdateModeLabel();
+    }
+
+    // Provider-mode smooth cycle: pick the next REQUESTABLE mode and hand it to the
+    // shared sequencer (ramps ipdFactor around the switch). The rig's steady IPD is
+    // the tuning slider's value so a user-tuned disparity is preserved.
+    void CycleRenderModeProvider()
+    {
+        if (m_ModeIndices == null || m_ModeIndices.Length == 0) return;
+        int n = m_ModeIndices.Length;
+        int next = m_CurrentModeArrayIdx;
+        for (int step = 0; step < n; step++)
+        {
+            next = (next + 1) % n;
+            if (m_ModeRequestable == null || m_ModeRequestable[next]) break;
+        }
+        uint curActive = DisplayXRProvider.ActiveModeIndex;
+        uint curVC = 2;
+        for (int i = 0; i < n; i++) if (m_ModeIndices[i] == curActive) { curVC = m_ModeViewCounts[i]; break; }
+        float steady = m_IpdSlider != null ? m_IpdSlider.value : kIpdDefault;
+        float curIpd = (displayRig != null) ? displayRig.ipdFactor : steady;
+        m_ModeSwitch.Request(m_ModeIndices[next], m_ModeViewCounts[next],
+                             curActive, curVC, curIpd, steady);
+    }
+
     static string SynthesizeModeName(uint modeIndex, bool hw3d, uint cols, uint rows, uint viewCount)
     {
         if (!hw3d) return "2D Mono";
@@ -381,6 +488,8 @@ public class DisplayXRTuningUI : MonoBehaviour
 
     void CycleRenderMode()
     {
+        if (m_ProviderMode) { CycleRenderModeProvider(); return; }
+
         if (m_ModeIndices == null || m_ModeIndices.Length == 0) return;
         m_CurrentModeArrayIdx = (m_CurrentModeArrayIdx + 1) % m_ModeIndices.Length;
         try

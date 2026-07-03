@@ -400,6 +400,12 @@ namespace DisplayXR
         {
             if (!GetKeyDown(KeyCode.V)) return;
 
+            // Under the provider, DemoWindowController owns the V key and drives a
+            // smooth ramped 2D<->3D switch (shared DisplayXRModeSwitch). Skip here so
+            // V isn't handled twice. The abrupt hardware-only path below stays for the
+            // hook / standalone editor sessions.
+            if (DisplayXR.DisplayXRProviderDriver.IsActive) return;
+
             // Toggle 2D/3D via the non-standalone API (works in built apps)
             m_CurrentRenderingMode = m_CurrentRenderingMode == 0 ? 1 : 0;
             DisplayXRNative.displayxr_request_display_mode(m_CurrentRenderingMode);

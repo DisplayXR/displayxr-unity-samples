@@ -84,6 +84,10 @@ public class TigerSpeechBubble : MonoBehaviour
     private bool m_SurroundRectPushed;
     private RectInt m_LastZoneRect = new RectInt(-1, -1, -1, -1);
 
+    // Multi-zone test (#166 Phase B2, DISPLAYXR_MULTI_ZONE=1): split the bottom band
+    // into two side-by-side 3D zones. Set in SeedLaunchZone (before ApplyLayout runs).
+    private static bool s_MultiZone;
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void AutoInstall()
     {
@@ -118,6 +122,24 @@ public class TigerSpeechBubble : MonoBehaviour
         try
         {
             DisplayXRNative.displayxr_set_3d_zone_rect(0, splitY, panelW, panelH - splitY);
+            // Multi-zone test (#166 Phase B2, opt-in DISPLAYXR_MULTI_ZONE=1): split the
+            // BOTTOM tiger band into TWO side-by-side 3D zones (both weave the scene
+            // from their own zone framing). The top bubble band is UNTOUCHED — so no
+            // 3D-zone / Local2D overlap. Two independent 3D zones = cube_zones pattern.
+            s_MultiZone = System.Environment.GetEnvironmentVariable("DISPLAYXR_MULTI_ZONE") == "1";
+            int z0w = s_MultiZone ? panelW / 2 : panelW;
+
+            // Provider mode (#166 Phase B): seed the provider's zone too (before its
+            // session starts → swapchain born zone-sized). Harmless on the hook path.
+            DisplayXR.DisplayXRProvider.SetZoneRect(0, splitY, z0w, panelH - splitY);
+
+            if (s_MultiZone)
+            {
+                DisplayXR.DisplayXRProvider.SetZoneCount(2);
+                DisplayXR.DisplayXRProvider.SetZone(1, 2, panelW / 2, splitY, panelW - panelW / 2, panelH - splitY);
+                Debug.Log($"[TigerSpeechBubble] MULTI-ZONE: zone0=bottom-left(0,{splitY},{panelW / 2},{panelH - splitY}) " +
+                          $"zone1=bottom-right({panelW / 2},{splitY},{panelW - panelW / 2},{panelH - splitY})");
+            }
             Debug.Log($"[TigerSpeechBubble] Seeded launch 3D-zone rect (0,{splitY},{panelW},{panelH - splitY}) " +
                       $"before XR init (eye RT will be sized to the zone extent).");
         }
@@ -340,7 +362,9 @@ public class TigerSpeechBubble : MonoBehaviour
             PushSurroundRect(0, 0, m_PanelW, splitY);
 
         // --- 3D tiger zone (bottom): the runtime Kooima-frames the tiger here.
-        var zone = new RectInt(0, splitY, m_PanelW, m_PanelH - splitY);
+        // Multi-zone: zone 0 = bottom-LEFT half (zone 1 = bottom-right, seeded once).
+        int zoneW = s_MultiZone ? m_PanelW / 2 : m_PanelW;
+        var zone = new RectInt(0, splitY, zoneW, m_PanelH - splitY);
         if (!zone.Equals(m_LastZoneRect))
         {
             PushCanvasRect(zone.x, zone.y, zone.width, zone.height);
@@ -360,6 +384,8 @@ public class TigerSpeechBubble : MonoBehaviour
         // surround path still drives the 3D — a safe graceful fallback. The
         // silhouette/click-through still reads the canvas rect, so push both.
         try { DisplayXRNative.displayxr_set_3d_zone_rect(x, y, w, h); }
+        catch (System.EntryPointNotFoundException) { }
+        try { DisplayXR.DisplayXRProvider.SetZoneRect(x, y, w, h); }
         catch (System.EntryPointNotFoundException) { }
         try { DisplayXRNative.displayxr_set_canvas_rect(x, y, (uint)w, (uint)h); }
         catch (System.EntryPointNotFoundException) { }

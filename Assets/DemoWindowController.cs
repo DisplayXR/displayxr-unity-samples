@@ -49,22 +49,25 @@ public class DemoWindowController : MonoBehaviour
              "focus, not clicked-through to the desktop).")]
     public Key renderModeToggleKey = Key.V;
 
-    [Tooltip("FRAMES over which to ramp the rig's IPD factor 1<->0 around a 2D/3D " +
-             "switch (parallax stays at 1 so head-tracked perspective is kept). " +
-             "Frame-based, NOT time-based: a frame hitch during the heavy HW " +
-             "switch can't skip the ramp into a snap. 3D->2D ramps down THEN " +
-             "switches; 2D->3D switches THEN ramps up.")]
-    public int modeSwitchRampFrames = 24;
-
-    [Tooltip("Frames to hold mono (IPD 0) AFTER engaging 3D before ramping the " +
-             "disparity up, so the HW mode-switch transition and the disparity " +
-             "growth don't overlap.")]
-    public int modeSwitchSettleFrames = 4;
+    [Tooltip("Seconds to ease the stereo disparity (ipdFactor) across a 2D<->3D " +
+             "switch, via the shared DisplayXRModeSwitch (parallax stays at 1 so " +
+             "head-tracked perspective is kept). 3D->2D ramps down THEN switches; " +
+             "2D->3D switches THEN ramps up. 0 = instant. ~0.4s matches the demo's " +
+             "former 24-frame ramp.")]
+    public float modeTransitionSeconds = 0.4f;
 
     // Tracked render mode (the display starts in 3D for a stereo app). There is
-    // no getter, so we toggle from this assumed initial state.
+    // no getter, so we toggle from this assumed initial state; updated when the
+    // sequencer fires the switch.
     private bool m_Mode3D = true;
-    private Coroutine m_ModeSwitch;   // non-null while a ramped switch is running
+    // Shared smooth 2D<->3D sequencer (plugin: DisplayXR.DisplayXRModeSwitch) — the C#
+    // port of displayxr-common's mode_switch the native test apps use. Replaces the
+    // former hand-rolled coroutine ramp; owns the ramp-then-fire / fire-then-ramp
+    // asymmetry. The runtime's #615 one-frame coherence guard covers the first 3D
+    // frame (so no app-side settle-frames hold is needed).
+    private readonly DisplayXR.DisplayXRModeSwitch m_ModeSeq = new DisplayXR.DisplayXRModeSwitch();
+    private bool m_ModeSeqConfigured;
+    private const float kSteadyIpd = 1.0f; // full-3D disparity to restore to
 
     // Window-size persistence: remember the overlay size across launches so the
     // app starts at the size the user last set (the layout/split persists in
@@ -174,13 +177,43 @@ public class DemoWindowController : MonoBehaviour
             // ("tiger in focus") and not mid-switch. Suppressed while Ctrl held.
             if (!ctrl && renderModeToggleKey != Key.None
                 && kb[renderModeToggleKey].wasPressedThisFrame
-                && DisplayXRNative.displayxr_is_our_process_foreground() != 0
-                && m_ModeSwitch == null)
+                && DisplayXRNative.displayxr_is_our_process_foreground() != 0)
             {
-                m_ModeSwitch = StartCoroutine(SwitchRenderMode(!m_Mode3D));
+                // Retargets cleanly if pressed mid-ramp (no "in flight" guard needed).
+                RequestModeSwitch(!m_Mode3D);
             }
         }
+
+        // Drive the shared smooth 2D<->3D sequencer every frame: push its ramped
+        // ipdFactor onto the rig and fire the runtime mode request on the frame it
+        // signals. (Built app only — Update returns early in the editor above.)
+        if (!m_ModeSeqConfigured) { m_ModeSeq.Configure(modeTransitionSeconds); m_ModeSeqConfigured = true; }
+        float seqIpd = m_ModeSeq.Update(Time.deltaTime, out bool seqFire, out uint seqMode);
+        if (m_ModeSeq.Active) SetStereoAmount(seqIpd);
+        if (seqFire)
+        {
+            if (DisplayXR.DisplayXRProviderDriver.IsActive)
+                DisplayXR.DisplayXRProvider.RequestRenderingMode(seqMode);
+            else
+                DisplayXRNative.displayxr_standalone_request_rendering_mode(seqMode);
+            m_Mode3D = (seqMode == 1);
+            Debug.Log($"[Demo] Render mode -> {(m_Mode3D ? "3D" : "2D")} (smooth sequencer)");
+        }
 #endif
+    }
+
+    // Hand the target mode to the shared sequencer. Mode index 0 = 2D (1 view),
+    // 1 = 3D (2 views) — the runtime standard. currentIpd is the live ramp value when
+    // mid-switch, else the steady-state for the current mode (so the first 3D->2D
+    // press ramps down from full disparity, not from a stale 0).
+    private void RequestModeSwitch(bool to3D)
+    {
+        uint targetMode = to3D ? 1u : 0u;
+        uint targetVC   = to3D ? 2u : 1u;
+        uint curMode    = m_Mode3D ? 1u : 0u;
+        uint curVC      = m_Mode3D ? 2u : 1u;
+        float curIpd    = m_ModeSeq.Active ? m_ModeSeq.Ipd : (m_Mode3D ? kSteadyIpd : 0f);
+        m_ModeSeq.Request(targetMode, targetVC, curMode, curVC, curIpd, kSteadyIpd);
     }
 
     // Flush remembered window size/position (tracked in-memory each frame) so it
@@ -197,57 +230,9 @@ public class DemoWindowController : MonoBehaviour
         Application.Quit();
     }
 
-    // FULL render-mode switch with a smooth disparity ramp so the 2D/3D change
-    // doesn't pop. 3D->2D: ramp stereo 1->0 (collapse to mono) THEN request 2D
-    // (seamless, content is already flat). 2D->3D: request 3D THEN ramp 0->1
-    // (disparity grows back in). Mode index 0 = 2D, 1 = 3D (runtime standard,
-    // same as the Editor Preview). The standalone shim falls back to the hooked
-    // backend in a built player.
-    private System.Collections.IEnumerator SwitchRenderMode(bool to3D)
-    {
-        if (to3D)
-        {
-            // Force IPD to 0 and let the rig push it for a frame BEFORE engaging
-            // 3D, so the runtime switches into stereo with the eyes already
-            // coincident (mono) — otherwise 3D engages at full native disparity
-            // for a frame and pops. Then ramp 0->1 to grow disparity smoothly.
-            SetStereoAmount(0f);
-            yield return null;
-            m_Mode3D = true;
-            int ok = DisplayXRNative.displayxr_standalone_request_rendering_mode(1);
-            Debug.Log($"[Demo] Render mode -> 3D (returned {ok}); settling then ramping IPD 0->1");
-            // Hold mono for a few frames so the HW/composition switch settles
-            // before the disparity grows (the EXT request has no completion event
-            // to wait on — see note to the user / runtime issue).
-            for (int i = 0; i < modeSwitchSettleFrames; i++)
-                yield return null;
-            yield return RampStereo(0f, 1f);
-        }
-        else
-        {
-            yield return RampStereo(1f, 0f);
-            m_Mode3D = false;
-            int ok = DisplayXRNative.displayxr_standalone_request_rendering_mode(0);
-            Debug.Log($"[Demo] Render mode -> 2D (returned {ok}) after parallax ramp 1->0");
-        }
-        m_ModeSwitch = null;
-    }
-
-    // Frame-based ramp: advances a fixed fraction per RENDERED frame, so even if
-    // the HW mode switch causes a frame hitch the ramp still shows every step
-    // (a time-based ramp would skip them on a big deltaTime → snap). NOTE: the
-    // rig IPD ramp is verified smooth here; a residual 2D->3D output snap is
-    // runtime-side (it doesn't honor the per-frame view-rig IPD across the mode
-    // switch) — see DisplayXR/displayxr-runtime#615.
-    private System.Collections.IEnumerator RampStereo(float from, float to)
-    {
-        int n = Mathf.Max(1, modeSwitchRampFrames);
-        for (int i = 1; i <= n; i++)
-        {
-            SetStereoAmount(Mathf.Lerp(from, to, (float)i / n));
-            yield return null;
-        }
-    }
+    // (SwitchRenderMode / RampStereo removed — the smooth ramp is now the shared
+    // DisplayXR.DisplayXRModeSwitch sequencer, driven per-frame in Update. See
+    // RequestModeSwitch + the sequencer-drive block in Update.)
 
     // Scale the active rig's IPD only: 1 = natural separation, 0 = mono (both
     // eyes coincide at the cyclopean center). parallaxFactor is intentionally

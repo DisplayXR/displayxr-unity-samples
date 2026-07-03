@@ -99,6 +99,16 @@ namespace DisplayXR
         private int m_CurrentRenderingMode = 1;
         private static int s_LastTabFrame = -1;
 
+        // Smooth 2D<->3D transition (provider mode): the shared plugin sequencer
+        // (DisplayXRModeSwitch, C# port of displayxr-common's mode_switch). Ramps the
+        // rig ipdFactor across the switch. Hook/standalone keep the abrupt toggle.
+        [Tooltip("Seconds to ease the stereo disparity across a 2D<->3D switch " +
+                 "(provider mode, via the shared DisplayXRModeSwitch). 0 = instant.")]
+        public float modeTransitionSeconds = 0.4f;
+        private readonly DisplayXRModeSwitch m_ModeSeq = new DisplayXRModeSwitch();
+        private bool m_ModeSeqConfigured;
+        private const float kSteadyIpd = 1.0f;
+
         void Update()
         {
             // Tab cycles cameras globally (only process once per frame).
@@ -147,7 +157,30 @@ namespace DisplayXR
             HandleQuit();
             HandleFullscreen();
             HandleModeCycle();
+            HandleModeSwitchSequencer();
             HandleScreenshot();
+        }
+
+        // Provider-mode smooth 2D<->3D drive: advance the shared sequencer, push its
+        // ramped ipdFactor onto the rigs, and fire the runtime mode request on the
+        // signalled frame. No-op on the hook/standalone paths.
+        private void HandleModeSwitchSequencer()
+        {
+            if (!DisplayXRProviderDriver.IsActive) return;
+            if (!m_ModeSeqConfigured) { m_ModeSeq.Configure(modeTransitionSeconds); m_ModeSeqConfigured = true; }
+            float ipd = m_ModeSeq.Update(Time.deltaTime, out bool fire, out uint mode);
+            if (m_ModeSeq.Active) SetRigIpd(ipd);
+            if (fire)
+            {
+                DisplayXRProvider.RequestRenderingMode(mode);
+                m_CurrentRenderingMode = (int)mode; // 0 = 2D, 1 = 3D
+            }
+        }
+
+        private void SetRigIpd(float a)
+        {
+            foreach (var d in FindObjectsByType<DisplayXRDisplay>(FindObjectsSortMode.None)) if (d != null) d.ipdFactor = a;
+            foreach (var c in FindObjectsByType<DisplayXRCamera>(FindObjectsSortMode.None)) if (c != null) c.ipdFactor = a;
         }
 
         private bool IsActiveCamera()
@@ -183,18 +216,24 @@ namespace DisplayXR
             }
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-            // Shell mode AND editor SA preview both use the native button
-            // tracker because Unity's new Input System doesn't see clicks
-            // when our preview window has the foreground/click target role.
-            // Mouse position deltas still come via Mouse.current.delta
-            // (Raw Input — works because Unity stays foreground via
-            // WS_EX_NOACTIVATE on the preview HWND).
-            if ((IsShellMode() || IsSAPreviewRunning()) && Mouse.current != null)
+            // Shell mode, editor SA preview, AND the provider (built-player overlay
+            // or #173 editor dedicated window) all present the woven output in a
+            // window separate from Unity's game/Game-View surface, so
+            // Mouse.current.position does NOT track the cursor while it's over that
+            // window (the position-delta path below would read a frozen position and
+            // never rotate). Use Mouse.current.delta instead — it's Raw Input, so it's
+            // cursor-location-independent and reaches Unity via the focus hook's
+            // RIDEV_INPUTSINK even when our window (not Unity's) is under the cursor.
+            // Button state: shell/SA read the native WndProc tracker; the provider
+            // reads Mouse.current.leftButton (also Raw Input, same path as keyboard).
+            bool providerMouse = IsProviderActive() && !IsShellMode() && !IsSAPreviewRunning();
+            if ((IsShellMode() || IsSAPreviewRunning() || providerMouse) && Mouse.current != null)
             {
-                if (ShellGetMouseButtonDown(0))
-                    m_Dragging = true;
-                if (ShellGetMouseButtonUp(0))
-                    m_Dragging = false;
+                // Button state comes from the native WndProc tracker for ALL three
+                // (shell/SA/provider) — Unity's Input System doesn't see clicks over
+                // our separate weave window. UpdateShellMouse populated it above.
+                if (ShellGetMouseButtonDown(0)) m_Dragging = true;
+                if (ShellGetMouseButtonUp(0))   m_Dragging = false;
                 if (m_Dragging)
                 {
                     Vector2 delta = Mouse.current.delta.ReadValue();
@@ -274,6 +313,16 @@ namespace DisplayXR
             catch { return false; }
         }
 
+        // True when the custom IUnityXRDisplay provider is driving rendering (built
+        // player OR editor Play Mode). Used to route mouse rotation through the
+        // Raw-Input delta path (the woven output is a separate window, so
+        // Mouse.current.position doesn't track the cursor there).
+        private static bool IsProviderActive()
+        {
+            try { return DisplayXRProviderDriver.IsActive; }
+            catch { return false; }
+        }
+
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
         private static bool IsOurProcessForeground()
         {
@@ -298,6 +347,17 @@ namespace DisplayXR
                 {
                     DisplayXRNative.displayxr_standalone_get_preview_mouse_state(
                         out s_shellButtonsCurr, out _);
+                }
+                catch (System.EntryPointNotFoundException) { /* old binary */ }
+            }
+            else if (IsProviderActive())
+            {
+                // Provider: the woven output is a separate window, so Unity's Input
+                // System doesn't register clicks over it. The dedicated window's
+                // WndProc tracks button state into the native pointer, read here.
+                try
+                {
+                    DisplayXRNative.displayxr_get_overlay_pointer(out _, out _, out s_shellButtonsCurr);
                 }
                 catch (System.EntryPointNotFoundException) { /* old binary */ }
             }
@@ -386,8 +446,31 @@ namespace DisplayXR
 
         private void HandleQuit()
         {
-            if (GetKeyDown(KeyCode.Escape))
-                Application.Quit();
+            bool quit = GetKeyDown(KeyCode.Escape);
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            // The dedicated provider window's / overlay's close (X) button and Alt+F4
+            // raise a native close-request flag (WM_CLOSE is swallowed so the live
+            // weave target survives the frame). Poll + honor it here so closing the
+            // window quits the app / stops Play Mode.
+            try
+            {
+                if (DisplayXRNative.displayxr_consume_overlay_close_request() != 0)
+                    quit = true;
+            }
+            catch (System.EntryPointNotFoundException) { /* old binary */ }
+#endif
+            if (quit)
+                Quit();
+        }
+
+        // Application.Quit() is ignored in the editor — stop Play Mode explicitly there.
+        private static void Quit()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
 
         private void HandleFullscreen()
@@ -400,7 +483,23 @@ namespace DisplayXR
         {
             if (!GetKeyDown(KeyCode.V)) return;
 
-            // Toggle 2D/3D via the non-standalone API (works in built apps)
+            // Provider: hand the target to the shared sequencer for a smooth ramped
+            // switch (HandleModeSwitchSequencer fires the runtime request + ramps the
+            // rig ipdFactor). Retargets cleanly if pressed mid-ramp.
+            if (DisplayXRProviderDriver.IsActive)
+            {
+                bool to3D = m_CurrentRenderingMode == 0; // toggle from current
+                uint targetMode = to3D ? 1u : 0u;
+                uint targetVC   = to3D ? 2u : 1u;
+                uint curMode    = (uint)m_CurrentRenderingMode;
+                uint curVC      = m_CurrentRenderingMode == 1 ? 2u : 1u;
+                float curIpd    = m_ModeSeq.Active ? m_ModeSeq.Ipd
+                                                   : (m_CurrentRenderingMode == 1 ? kSteadyIpd : 0f);
+                m_ModeSeq.Request(targetMode, targetVC, curMode, curVC, curIpd, kSteadyIpd);
+                return;
+            }
+
+            // Hook / standalone: abrupt hardware toggle (no rig-IPD ramp available).
             m_CurrentRenderingMode = m_CurrentRenderingMode == 0 ? 1 : 0;
             DisplayXRNative.displayxr_request_display_mode(m_CurrentRenderingMode);
             Debug.Log($"[DisplayXR] Display mode → {(m_CurrentRenderingMode == 0 ? "2D" : "3D")}");

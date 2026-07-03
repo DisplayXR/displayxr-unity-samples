@@ -55,7 +55,7 @@ ShowUninstDetails show
 ; baseline stereo pipeline, so the same floor as the gaussiansplat reference
 ; installer (1.3.0) is fine — that's the runtime build where the VK→D3D11
 ; KMT-shared-texture / DComp bridge stabilized.
-!define MIN_RUNTIME_VERSION "1.3.0"
+!define MIN_RUNTIME_VERSION "1.26.1"
 
 ;--------------------------------
 ; UI

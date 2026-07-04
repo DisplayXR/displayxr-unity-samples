@@ -121,7 +121,6 @@ public class TigerSpeechBubble : MonoBehaviour
         splitY = Mathf.Clamp(splitY, 1, panelH - 1);
         try
         {
-            DisplayXRNative.displayxr_set_3d_zone_rect(0, splitY, panelW, panelH - splitY);
             // Multi-zone test (#166 Phase B2, opt-in DISPLAYXR_MULTI_ZONE=1): split the
             // BOTTOM tiger band into TWO side-by-side 3D zones (both weave the scene
             // from their own zone framing). The top bubble band is UNTOUCHED — so no
@@ -129,8 +128,8 @@ public class TigerSpeechBubble : MonoBehaviour
             s_MultiZone = System.Environment.GetEnvironmentVariable("DISPLAYXR_MULTI_ZONE") == "1";
             int z0w = s_MultiZone ? panelW / 2 : panelW;
 
-            // Provider mode (#166 Phase B): seed the provider's zone too (before its
-            // session starts → swapchain born zone-sized). Harmless on the hook path.
+            // Seed the provider's zone before its session starts → swapchain born
+            // zone-sized.
             DisplayXR.DisplayXRProvider.SetZoneRect(0, splitY, z0w, panelH - splitY);
 
             if (s_MultiZone)
@@ -378,13 +377,9 @@ public class TigerSpeechBubble : MonoBehaviour
     {
         if (w <= 0 || h <= 0) return;
         // XR_EXT_display_zones: push the 3D-zone rect so the runtime Kooima-frames
-        // the tiger INTO this rect (the rect IS the canvas). The plugin gates the
-        // legacy canvas-rect call off whenever the runtime supports zones; when it
-        // does not (older runtime), the zone push is inert and the canvas-rect/
-        // surround path still drives the 3D — a safe graceful fallback. The
-        // silhouette/click-through still reads the canvas rect, so push both.
-        try { DisplayXRNative.displayxr_set_3d_zone_rect(x, y, w, h); }
-        catch (System.EntryPointNotFoundException) { }
+        // the tiger INTO this rect (the rect IS the canvas). The provider drives the
+        // zone; the silhouette/click-through separately reads the canvas rect, so
+        // push both.
         try { DisplayXR.DisplayXRProvider.SetZoneRect(x, y, w, h); }
         catch (System.EntryPointNotFoundException) { }
         try { DisplayXRNative.displayxr_set_canvas_rect(x, y, (uint)w, (uint)h); }
@@ -395,8 +390,6 @@ public class TigerSpeechBubble : MonoBehaviour
     private void ClearCanvasRect()
     {
         if (!m_CanvasRectPushed) return;
-        try { DisplayXRNative.displayxr_clear_3d_zone(); }
-        catch (System.EntryPointNotFoundException) { }
         try { DisplayXRNative.displayxr_set_canvas_rect(0, 0, 0, 0); }
         catch (System.EntryPointNotFoundException) { }
         m_CanvasRectPushed = false;

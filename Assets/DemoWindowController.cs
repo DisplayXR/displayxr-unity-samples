@@ -192,10 +192,9 @@ public class DemoWindowController : MonoBehaviour
         if (m_ModeSeq.Active) SetStereoAmount(seqIpd);
         if (seqFire)
         {
-            if (DisplayXR.DisplayXRProviderDriver.IsActive)
-                DisplayXR.DisplayXRProvider.RequestRenderingMode(seqMode);
-            else
-                DisplayXRNative.displayxr_standalone_request_rendering_mode(seqMode);
+            // The provider owns the runtime mode request now (the hook / standalone
+            // path is gone). RequestRenderingMode no-ops if the session isn't running.
+            DisplayXR.DisplayXRProvider.RequestRenderingMode(seqMode);
             m_Mode3D = (seqMode == 1);
             Debug.Log($"[Demo] Render mode -> {(m_Mode3D ? "3D" : "2D")} (smooth sequencer)");
         }

@@ -90,9 +90,9 @@ namespace DisplayXR
             // can default to 2D (mono passthrough), and the first V keypress
             // re-requests the same mode the C# is about to leave (no visible
             // effect), making users press V twice to reach 3D. Harmless to
-            // call early — the native side queues the request until the
-            // session is ready to handle it.
-            DisplayXRNative.displayxr_request_display_mode(m_CurrentRenderingMode);
+            // call early — the provider queues the request until the session
+            // is ready to handle it.
+            DisplayXRProvider.RequestRenderingMode((uint)m_CurrentRenderingMode);
         }
 
         // Rendering mode cycling
@@ -183,13 +183,12 @@ namespace DisplayXR
             }
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-            // Shell mode AND editor SA preview both use the native button
-            // tracker because Unity's new Input System doesn't see clicks
-            // when our preview window has the foreground/click target role.
-            // Mouse position deltas still come via Mouse.current.delta
-            // (Raw Input — works because Unity stays foreground via
-            // WS_EX_NOACTIVATE on the preview HWND).
-            if ((IsShellMode() || IsSAPreviewRunning()) && Mouse.current != null)
+            // Shell mode uses the native button tracker because Unity's new
+            // Input System doesn't see clicks when our window has the
+            // foreground/click target role. Mouse position deltas still come
+            // via Mouse.current.delta (Raw Input — works because Unity stays
+            // foreground via WS_EX_NOACTIVATE on the window).
+            if (IsShellMode() && Mouse.current != null)
             {
                 if (ShellGetMouseButtonDown(0))
                     m_Dragging = true;
@@ -268,12 +267,6 @@ namespace DisplayXR
             return s_shellMode;
         }
 
-        private static bool IsSAPreviewRunning()
-        {
-            try { return DisplayXRNative.displayxr_standalone_is_running() != 0; }
-            catch { return false; }
-        }
-
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
         private static bool IsOurProcessForeground()
         {
@@ -283,7 +276,7 @@ namespace DisplayXR
 #endif
 
         /// Call once per frame (from Update) to snapshot mouse button state from
-        /// either the shell-mode tracker or the SA preview window's WndProc.
+        /// the shell-mode tracker.
         private static void UpdateShellMouse()
         {
             s_shellButtonsPrev = s_shellButtonsCurr;
@@ -291,15 +284,6 @@ namespace DisplayXR
             {
                 DisplayXRNative.displayxr_get_shell_mouse_state(
                     out s_shellButtonsCurr, out _, out _);
-            }
-            else if (IsSAPreviewRunning())
-            {
-                try
-                {
-                    DisplayXRNative.displayxr_standalone_get_preview_mouse_state(
-                        out s_shellButtonsCurr, out _);
-                }
-                catch (System.EntryPointNotFoundException) { /* old binary */ }
             }
         }
 
@@ -401,15 +385,9 @@ namespace DisplayXR
             if (!GetKeyDown(KeyCode.V)) return;
 
             // Under the provider, DemoWindowController owns the V key and drives a
-            // smooth ramped 2D<->3D switch (shared DisplayXRModeSwitch). Skip here so
-            // V isn't handled twice. The abrupt hardware-only path below stays for the
-            // hook / standalone editor sessions.
-            if (DisplayXR.DisplayXRProviderDriver.IsActive) return;
-
-            // Toggle 2D/3D via the non-standalone API (works in built apps)
-            m_CurrentRenderingMode = m_CurrentRenderingMode == 0 ? 1 : 0;
-            DisplayXRNative.displayxr_request_display_mode(m_CurrentRenderingMode);
-            Debug.Log($"[DisplayXR] Display mode → {(m_CurrentRenderingMode == 0 ? "2D" : "3D")}");
+            // smooth ramped 2D<->3D switch (shared DisplayXRModeSwitch), so there is
+            // nothing to do here. The removed hook / standalone editor path used to
+            // toggle the hardware mode directly.
         }
 
         private static int s_LastScreenshotFrame = -1;
@@ -426,14 +404,6 @@ namespace DisplayXR
 
         private static bool ShouldIgnoreInput()
         {
-            // Ignore input while the mouse cursor is over the preview window.
-            try
-            {
-                if (DisplayXRNative.displayxr_standalone_window_is_interacting() != 0)
-                    return true;
-            }
-            catch (System.EntryPointNotFoundException) { }
-
             // Wsui composition layer: a slider drag or button click in flight
             // through DisplayXRWindowSpaceUI shouldn't double-route to scene
             // input. App-side router (e.g. DisplayXRWsuiMouseRouter) flips
@@ -445,21 +415,17 @@ namespace DisplayXR
             if (IsPointerOverUgui()) return true;
 
 #if UNITY_EDITOR
-            // When the SA preview is running, the user is interacting with the
-            // native preview window — which isn't an EditorWindow. Don't gate
-            // input on EditorWindow focus, otherwise clicking the Inspector
-            // or any other editor pane would freeze input until the user
-            // clicks back into Game View or the Preview Window.
-            bool saRunning = false;
-            try { saRunning = DisplayXRNative.displayxr_standalone_is_running() != 0; }
-            catch { }
-            if (!saRunning)
+            // In provider Play Mode the woven output is a separate dedicated window
+            // (#173), not an EditorWindow. Don't gate input on EditorWindow focus then,
+            // otherwise clicking the Inspector or any other editor pane would freeze
+            // input until the user clicks back into Game View.
+            if (!DisplayXRProviderDriver.IsActive)
             {
                 var focused = UnityEditor.EditorWindow.focusedWindow;
                 if (focused == null)
                     return true;
                 string typeName = focused.GetType().Name;
-                if (typeName != "GameView" && typeName != "DisplayXRPreviewWindow")
+                if (typeName != "GameView")
                     return true;
             }
 #endif

@@ -42,5 +42,5 @@ Previous releases (≤ v1.5.8) bundled it under `Runtime/`. v1.5.9 left a deprec
 ## Cross-references
 
 - `DisplayXRRigManager` (plugin Runtime) — registry of active rigs, `CycleNext()`
-- `DisplayXRFeature.Instance.RequestDisplayMode(bool)` (plugin Runtime) — 2D/3D mode
+- `DisplayXRProvider.RequestDisplayMode(bool)` (plugin Runtime) — 2D/3D mode
 - `DisplayXRTransparentOverlay.PointerPosition / PointerDelta / IsLeftPressed` (plugin Runtime) — cursor state on transparent-overlay builds (Win32 native poll + Mac Mouse.current poll)

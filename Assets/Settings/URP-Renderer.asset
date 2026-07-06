@@ -46,8 +46,7 @@ MonoBehaviour:
     probeVolumeBlendStatesCS: {fileID: 0}
   m_RendererFeatures:
   - {fileID: -2892447677067764734}
-  - {fileID: 7709953860123170333}
-  m_RendererFeatureMap: 02dcf89c29f6dbd71d164bcb2f42ff6a
+  m_RendererFeatureMap: 02dcf89c29f6dbd7
   m_UseNativeRenderPass: 0
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 0}
@@ -76,16 +75,3 @@ MonoBehaviour:
   m_DepthTextureFormat: 0
   m_AccurateGbufferNormals: 0
   m_IntermediateTextureMode: 1
---- !u!114 &7709953860123170333
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 087af0c654ae45708c9052f8d1e9499a, type: 3}
-  m_Name: Kooima Projection Fix
-  m_EditorClassIdentifier: com.displayxr.unity.urp::DisplayXR.URP.KooimaProjectionFixFeature
-  m_Active: 1

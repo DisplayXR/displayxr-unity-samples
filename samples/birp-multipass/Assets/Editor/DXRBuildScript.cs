@@ -31,9 +31,12 @@ public static class BuildScript
             new[] { GraphicsDeviceType.Direct3D12 });
         PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.StandaloneWindows64, false);
 
-        const string outDir = "Builds/Win64/DisplayXR-test";
+        // Derive the output name from the project's productName so the build
+        // output, BIN_DIR, and installer never drift on a rename.
+        var product = PlayerSettings.productName;
+        var outDir = "Builds/Win64/" + product;
         Directory.CreateDirectory(outDir);
-        var exe = Path.Combine(outDir, "DisplayXR-test.exe");
+        var exe = Path.Combine(outDir, product + ".exe");
 
         var opts = new BuildPlayerOptions
         {

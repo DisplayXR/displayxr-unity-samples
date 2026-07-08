@@ -73,6 +73,23 @@ variant — keep it in sync with `productName` if you rename (the installer
 builder reads `productName` directly and needs no such edit). All `.bat` are
 CRLF-pinned via `.gitattributes` (LF breaks cmd.exe if/goto parsing).
 
+## Releasing a sample
+
+There is **no Unity CI** (no license/runner), so releases are driven locally:
+
+1. Build the Player (`unity_build.bat`) + installer (`installer\build-installer.bat`).
+2. **Sign** the installer via the Leia self-hosted signing runner — the
+   `DXR_SIGN_REPO` provider's `sign-artifact` hook (dispatched from a machine
+   that has the signing script + secret in `.env.local`; same EV-cert provider
+   the runtime/bundle releases use). Unsigned installers still work but warn on
+   SmartScreen.
+3. Upload the **signed** installer to a GitHub Release
+   (`DisplayXR-Unity-<Key>-Setup-<ver>.exe`).
+
+Not wired into `/dxr-release` (that skill assumes a CI build + versions-bump
+dispatch, neither of which exists here). Samples aren't pinned in the runtime
+`versions.json` or the meta-bundle.
+
 Real Unity player builds are **not** run in CI (no license/runner) — CI is lint
 only (see below). Build + installer + install/uninstall smoke tests are manual
 on a Windows box with the runtime installed.

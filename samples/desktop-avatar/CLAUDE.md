@@ -1,5 +1,12 @@
 # CLAUDE.md
 
+> **Part of the [displayxr-unity-samples](https://github.com/DisplayXR/displayxr-unity-samples) monorepo.**
+> Folder `samples/desktop-avatar/` · product `DisplayXR-DesktopAvatar` · installs to `…\DisplayXR\Unity/DesktopAvatar`.
+> Installer/build logic is **shared** — see the root [CLAUDE.md](../../CLAUDE.md) and
+> `installer/common/SampleInstaller.nsh`; never fork installer logic into this sample.
+> Some sections below predate the consolidation from the former `displayxr-unity-test*`
+> repos — treat repo-structure/sibling references as mapping to `samples/*` here.
+
 Guidance for Claude Code when working in this repository.
 
 ## Project Overview

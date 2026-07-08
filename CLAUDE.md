@@ -57,10 +57,12 @@ collision.)
 
 ## Building
 
-Per sample: Unity **File ▸ Build** → `Builds/Win64/<productName>/`
-(batchmode: `DXRBuildScript.BuildWindows64`, output derived from `productName`),
-then `samples\<sample>\installer\build-installer.bat [VERSION]`, which delegates
-to `installer\common\build-sample-installer.bat`.
+Per sample: Unity **File ▸ Build** → `Builds/Win64/<productName>/`, then
+`samples\<sample>\installer\build-installer.bat [VERSION]`, which delegates to
+`installer\common\build-sample-installer.bat`. The BiRP sample has a batchmode
+entry point `BuildScript.BuildWindows64` (class `BuildScript` in
+`Assets/Editor/DXRBuildScript.cs` — note the class name differs from the file
+name), output derived from `productName`; other samples build via the GUI.
 
 Real Unity player builds are **not** run in CI (no license/runner) — CI is lint
 only (see below). Build + installer + install/uninstall smoke tests are manual

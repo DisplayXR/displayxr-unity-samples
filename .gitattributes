@@ -1,0 +1,70 @@
+# Auto-detect text files; store as LF in the repo, native line endings
+# (CRLF on Windows) in the working tree via core.autocrlf. Stops
+# Unity-rewritten asset files from showing up dirty just because their
+# line endings changed.
+* text=auto
+
+# Unity YAML — text + Unity's smart merge driver (if configured)
+*.unity              text merge=unityyamlmerge
+*.prefab             text merge=unityyamlmerge
+*.asset              text merge=unityyamlmerge
+*.meta               text merge=unityyamlmerge
+*.mat                text merge=unityyamlmerge
+*.anim               text merge=unityyamlmerge
+*.controller         text merge=unityyamlmerge
+*.physicMaterial     text merge=unityyamlmerge
+*.physicsMaterial2D  text merge=unityyamlmerge
+
+# Source
+*.cs text diff=csharp
+*.shader text
+*.cginc text
+*.hlsl text
+*.compute text
+
+# Configs / docs
+*.json text
+*.md text
+*.xml text
+*.yaml text
+*.yml text
+
+# Binary assets — explicit so git can't misclassify
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.bmp  binary
+*.tga  binary
+*.tif  binary
+*.tiff binary
+*.psd  binary
+*.exr  binary
+*.hdr  binary
+
+*.fbx  binary
+*.obj  binary
+*.blend binary
+*.dae  binary
+*.3ds  binary
+*.max  binary
+
+*.dll  binary
+*.so   binary
+*.dylib binary
+*.bundle binary
+*.exe  binary
+*.pdb  binary
+
+*.ttf  binary
+*.otf  binary
+
+*.wav  binary
+*.mp3  binary
+*.ogg  binary
+*.aif  binary
+*.aiff binary
+
+*.unitypackage binary
+*.zip binary
+*.7z  binary

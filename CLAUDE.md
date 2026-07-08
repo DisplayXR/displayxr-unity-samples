@@ -57,12 +57,21 @@ collision.)
 
 ## Building
 
-Per sample: Unity **File ▸ Build** → `Builds/Win64/<productName>/`, then
-`samples\<sample>\installer\build-installer.bat [VERSION]`, which delegates to
-`installer\common\build-sample-installer.bat`. The BiRP sample has a batchmode
-entry point `BuildScript.BuildWindows64` (class `BuildScript` in
-`Assets/Editor/DXRBuildScript.cs` — note the class name differs from the file
-name), output derived from `productName`; other samples build via the GUI.
+Per sample, build the Player then the installer:
+1. **Player** → `Builds/Win64/<productName>/`. Canonical headless path is
+   `samples\<sample>\unity_build.bat` (batchmode; honors the committed graphics
+   API). Or Unity **File ▸ Build**. The BiRP sample also has
+   `BuildScript.BuildWindows64` (class `BuildScript` in
+   `Assets/Editor/DXRBuildScript.cs` — class name differs from the file name;
+   it force-sets D3D12 and derives the output name from `productName`).
+2. **Installer** → `samples\<sample>\installer\build-installer.bat [VERSION]`,
+   which delegates to `installer\common\build-sample-installer.bat` (reads
+   `productName` from ProjectSettings so `BIN_DIR` can't drift).
+
+`unity_build.bat` currently hardcodes each sample's product name as the default
+variant — keep it in sync with `productName` if you rename (the installer
+builder reads `productName` directly and needs no such edit). All `.bat` are
+CRLF-pinned via `.gitattributes` (LF breaks cmd.exe if/goto parsing).
 
 Real Unity player builds are **not** run in CI (no license/runner) — CI is lint
 only (see below). Build + installer + install/uninstall smoke tests are manual

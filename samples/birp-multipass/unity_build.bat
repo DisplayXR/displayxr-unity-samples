@@ -8,9 +8,9 @@ REM  writing a log to Logs\unity_build_<variant>.log. This is the headless
 REM  equivalent of File > Build Settings > Build.
 REM
 REM  Usage:  unity_build.bat [variant]
-REM    variant  Optional build-folder/exe name (default: DisplayXR-test).
-REM             e.g.  unity_build.bat DisplayXR-test-d3d11
-REM             -> Builds\Win64\DisplayXR-test-d3d11\DisplayXR-test-d3d11.exe
+REM    variant  Optional build-folder/exe name (default: DisplayXR-BiRP-MultiPass).
+REM             e.g.  unity_build.bat DisplayXR-BiRP-MultiPass-d3d11
+REM             -> Builds\Win64\DisplayXR-BiRP-MultiPass-d3d11\DisplayXR-BiRP-MultiPass-d3d11.exe
 REM             (switch the Standalone graphics API in Player Settings to match
 REM              the variant before building; the API is baked from ProjectSettings.)
 REM
@@ -24,9 +24,9 @@ if "%UNITY_PATH%"=="" set "UNITY_PATH=C:\Program Files\Unity\Hub\Editor\%UNITY_V
 set "PROJECT_PATH=%~dp0"
 if "%PROJECT_PATH:~-1%"=="\" set "PROJECT_PATH=%PROJECT_PATH:~0,-1%"
 
-REM Variant = the build-folder + exe name (arg 1, default DisplayXR-test).
+REM Variant = the build-folder + exe name (arg 1, default DisplayXR-BiRP-MultiPass).
 set "VARIANT=%~1"
-if "%VARIANT%"=="" set "VARIANT=DisplayXR-test"
+if "%VARIANT%"=="" set "VARIANT=DisplayXR-BiRP-MultiPass"
 
 REM Build into a named subfolder (NOT loose in Win64) so the player and its
 REM _Data/dll sidecars stay self-contained — matches installer\build-installer.bat

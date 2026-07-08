@@ -68,3 +68,7 @@
 *.unitypackage binary
 *.zip binary
 *.7z  binary
+
+# Batch files must be CRLF or cmd.exe mis-parses if/goto blocks
+*.bat text eol=crlf
+*.cmd text eol=crlf

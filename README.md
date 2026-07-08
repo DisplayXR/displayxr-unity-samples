@@ -23,11 +23,13 @@ Avatar** feature showcase.
 
 ## Building a sample
 
-1. Open `samples/<sample>/` in Unity, then **File ▸ Build** to
-   `Builds/Win64/<productName>/`. The BiRP sample also has a batchmode entry
-   point (`BuildScript.BuildWindows64`, in `Assets/Editor/DXRBuildScript.cs`)
-   that derives the output name from the project's `productName`; the other
-   samples build via the Unity GUI.
+1. Build the Unity Player to `Builds/Win64/<productName>/`. Either:
+   - **Headless (canonical):** `samples\<sample>\unity_build.bat` — batchmode
+     build that honors the project's committed graphics API. Override the editor
+     with `set UNITY_PATH=...`.
+   - **Editor:** open `samples/<sample>/` in Unity and **File ▸ Build**. (The
+     BiRP sample additionally has `BuildScript.BuildWindows64` in
+     `Assets/Editor/DXRBuildScript.cs`, which force-sets D3D12.)
 2. Build its installer:
    ```bat
    samples\<sample>\installer\build-installer.bat [VERSION]

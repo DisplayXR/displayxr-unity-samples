@@ -5,7 +5,6 @@
       "depth": 0,
       "source": "git",
       "dependencies": {
-        "com.unity.xr.openxr": "1.16.1",
         "com.unity.xr.management": "4.4.0"
       },
       "hash": "471f6d2e8b114182a996bf264b672998d932c6df"

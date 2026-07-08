@@ -1,0 +1,388 @@
+// Auto-setup for the displayxr-unity-test-transparent project.
+//
+// At scene load: attaches DisplayXRTransparentOverlay to *every* DisplayXR rig
+// camera in the scene (DisplayXRDisplay or DisplayXRCamera). CubeTest.unity
+// ships with both rigs, and Unity may render either one depending on
+// component init order — flipping clear flags on only Camera.main left the
+// other rig's skybox showing in builds.
+
+using UnityEngine;
+using UnityEngine.XR;
+using UnityEngine.InputSystem;
+using DisplayXR;
+
+public static class TransparentAutoSetup
+{
+    // Must run BEFORE the OpenXR session is created — that's when the runtime
+    // reads transparentBackgroundEnabled off XrWin32WindowBindingCreateInfoEXT
+    // (Windows) / XrCocoaWindowBindingCreateInfoEXT (macOS) and decides
+    // whether to use the transparent-capable swapchain path. AfterSceneLoad
+    // is too late; SubsystemRegistration fires earlier than the XR loader init.
+    //
+    // No chroma color is involved — the runtime DP composes the desktop
+    // background under each tile pre-weave and alpha-gates post-weave, so
+    // Unity's alpha=0 camera clear goes straight through with true anti-
+    // aliased silhouettes.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void RequestTransparentSession()
+    {
+        DisplayXRTransparentOverlay.RequestTransparentSession();
+        // Avatar-style windowing is applied to the transparent OVERLAY (a
+        // top-level WS_EX_NOREDIRECTIONBITMAP window the runtime renders into,
+        // with Unity cloaked behind it) — NOT Unity's real HWND, which can't be
+        // made transparent (its opaque swapchain shows through). The overlay is
+        // born windowed (no RequestFullscreenOverlay) so it's a normal movable
+        // window; press B to toggle its decoration. Region click-through +
+        // right-drag move are already provided by DisplayXRTransparentOverlay.
+        Debug.Log("[TransparentAutoSetup] Requested runtime transparent-background mode (alpha-native); avatar windowing on the overlay.");
+    }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void Install()
+    {
+        // Configurable target names — EVERY object listed here joins the
+        // click-through silhouette mask AND becomes an independent clickable
+        // hit region. The mask is the union of all these renderers' per-eye
+        // silhouettes; the plugin feeds that union to SetWindowRgn, which is a
+        // hard window-shape clip. So an object NOT in this list is cut away
+        // (invisible + unclickable) wherever it falls outside the listed
+        // objects' silhouettes — that's why a freshly-added cube looked
+        // "clipped" until it was added here. Add an object's GameObject name
+        // to make it visible through the overlay and drag-rotatable.
+        //
+        // Foreground-only clip at the display plane (ClipAtDisplayPlane below)
+        // applies to ALL geometry per-view, so every target here is also
+        // clipped at the display plane automatically.
+        string[] k_TargetNames =
+        {
+            "cartoon tiger in witches hat_ rigged and animated",
+            "Cube",
+        };
+
+        var targetRoots = new System.Collections.Generic.List<GameObject>();
+        var hitList = new System.Collections.Generic.List<Renderer>();
+        foreach (var name in k_TargetNames)
+        {
+            var root = GameObject.Find(name);
+            if (root == null) continue;
+
+            // SkinnedMeshRenderer sits on a child node for FBX models;
+            // MeshRenderer on the root for the cube. Either works.
+            var rend = root.GetComponentInChildren<Renderer>(true);
+            if (rend == null) continue;
+
+            targetRoots.Add(root);
+            hitList.Add(rend);
+
+            // For SkinnedMeshRenderers the plugin manages a per-frame
+            // BakeMesh + MeshCollider on the rootBone, so we add no
+            // collider here — adding a BoxCollider on the SMR GO would
+            // shadow the per-triangle collider on AABB-inside-but-off-
+            // silhouette pixels. For plain MeshRenderers (e.g. the cube)
+            // ensure a collider exists for the raycast; the scene cube
+            // already ships a BoxCollider, but fall back to the deferred
+            // helper for any cube-like target that lacks one.
+            if (!(rend is SkinnedMeshRenderer)
+                && rend.GetComponent<Collider>() == null
+                && rend.GetComponent<AutoBoxColliderFromRenderer>() == null)
+            {
+                var auto = rend.gameObject.AddComponent<AutoBoxColliderFromRenderer>();
+                auto.source = rend;
+            }
+        }
+
+        Renderer[] hit = hitList.Count > 0 ? hitList.ToArray() : null;
+
+        int installed = 0;
+        foreach (var cam in Camera.allCameras)
+        {
+            if (cam == null) continue;
+
+            // Only target DisplayXR rig cameras — leave UI / overlay cameras alone.
+            bool isRig = cam.GetComponent<DisplayXRDisplay>() != null
+                      || cam.GetComponent<DisplayXRCamera>() != null;
+            if (!isRig) continue;
+
+            // In tiger / cube transparent-overlay mode we want left-drag
+            // reserved for the app's hit-tested interactions (DragRotateCube
+            // on the tiger). Disable DisplayXRInputController's built-in
+            // left-drag camera-look so it doesn't compound with DragRotateCube
+            // when clicking on the target (double-speed rotation) or sneak in
+            // a camera rotation when clicking off-target. WASD movement stays.
+            var ctrl = cam.GetComponent<DisplayXRInputController>();
+            if (ctrl != null)
+            {
+                // Left-drag reserved for the app's hit-tested rotate-target
+                // (DragRotateCube on the tiger). Scroll-zoom replaced by
+                // WheelZoomVHeight driving DisplayXRDisplay.virtualDisplayHeight
+                // — a zoom-in-window behavior more appropriate for the
+                // avatar use case than the controller's camera-transform
+                // scale / FOV change.
+                ctrl.mouseLookEnabled = false;
+                ctrl.scrollZoomEnabled = false;
+            }
+
+            var overlay = cam.GetComponent<DisplayXRTransparentOverlay>();
+            if (overlay == null)
+                overlay = cam.gameObject.AddComponent<DisplayXRTransparentOverlay>();
+            if (hit != null)
+                overlay.clickableRenderers = hit;
+
+            // Wire up the pointer-event API for the click-through test. These
+            // replace OnMouseDown for transparent-overlay mode (Unity's input
+            // system Mouse.current.position is frozen for cloaked HWNDs).
+            overlay.onPointerEnter.AddListener(r2 => Debug.Log($"[CubeTest] PointerEnter {r2?.name}"));
+            overlay.onPointerExit .AddListener(r2 => Debug.Log($"[CubeTest] PointerExit  {r2?.name}"));
+            overlay.onPointerDown .AddListener(r2 => Debug.Log($"[CubeTest] PointerDown  {r2?.name}"));
+            overlay.onPointerUp   .AddListener(r2 => Debug.Log($"[CubeTest] PointerUp    {r2?.name}"));
+            overlay.onPointerClick.AddListener(r2 => Debug.Log($"[CubeTest] PointerClick {r2?.name}"));
+
+            // Drag-to-rotate each target independently. DragRotateCube goes on
+            // the ROOT so transform.Rotate spins the whole model; the renderer
+            // is passed as `target` for the click-comparison. DragRotateCube
+            // gates on `r != target` in OnDown, so one instance per object
+            // never conflicts — each only rotates the object under the pointer.
+            // The overlay reference is resolved by DragRotateCube itself via
+            // DisplayXRRigManager.ActiveCamera — necessary because the
+            // active-rig gate in the overlay means only the currently-active
+            // rig fires events / updates PointerDelta.
+            for (int t = 0; t < targetRoots.Count; t++)
+            {
+                var rotate = targetRoots[t].GetComponent<DragRotateCube>();
+                if (rotate == null)
+                    rotate = targetRoots[t].AddComponent<DragRotateCube>();
+                rotate.target = hitList[t];
+            }
+
+            // Mouse-wheel zoom — drives the display-centric rig's
+            // virtualDisplayHeight (smaller = more zoom). The plugin v1.2.2+
+            // no longer self-resizes the overlay; we read the raw wheel
+            // delta via overlay.ConsumeWheelDelta() and apply it here.
+            // Camera-centric rigs (DisplayXRCamera) are skipped — vHeight
+            // is a display-rig concept.
+            var displayRig = cam.GetComponent<DisplayXRDisplay>();
+            if (displayRig != null)
+            {
+                var zoom = cam.GetComponent<WheelZoomVHeight>();
+                if (zoom == null)
+                    zoom = cam.gameObject.AddComponent<WheelZoomVHeight>();
+                zoom.overlay = overlay;
+                zoom.rig = displayRig;
+            }
+
+            // Foreground-only render (test-transparent#2): cull background
+            // objects entirely past the display plane. Uses Camera.cullingMatrix
+            // (not farClipPlane) so the overlay's Physics.Raycast hit detection
+            // keeps working — see ClipAtDisplayPlane class doc for the why.
+            if (cam.GetComponent<ClipAtDisplayPlane>() == null)
+                cam.gameObject.AddComponent<ClipAtDisplayPlane>();
+
+            // Tiger branch only: disable A/Q/D/E camera translation by
+            // locking world X / Y on the rig each LateUpdate. W/S
+            // (forward/back along world Z for a forward-facing rig)
+            // still works → push tiger in / out of display plane.
+            if (cam.GetComponent<LockToForwardAxis>() == null)
+                cam.gameObject.AddComponent<LockToForwardAxis>();
+
+            installed++;
+        }
+
+        if (installed == 0)
+            Debug.LogWarning("[TransparentAutoSetup] No DisplayXR rig cameras found; transparent overlay not installed.");
+        else
+            Debug.Log($"[TransparentAutoSetup] Alpha-native transparent overlay installed on {installed} rig camera(s)" +
+                      (hit != null && hit.Length > 0
+                          ? $" ({hit.Length} object(s) wired as hit region: {string.Join(", ", System.Array.ConvertAll(hit, r => r.name))})"
+                          : $" (none of [{string.Join(", ", k_TargetNames)}] found — whole window stays clickable)"));
+
+        // Stop Unity from rendering the camera mirror view to the parent
+        // window's backbuffer. Without this, the parent HWND fills with a
+        // flat 2D version of Camera.main's output, and you see THAT through
+        // the child overlay's transparent regions instead of the desktop.
+        // The OpenXR eye-render path is unaffected; only the mirror blit
+        // to the application's main window is suppressed.
+        XRSettings.gameViewRenderMode = GameViewRenderMode.None;
+        Debug.Log("[TransparentAutoSetup] XRSettings.gameViewRenderMode = None (suppress parent-window mirror).");
+
+#if UNITY_STANDALONE_OSX
+        // Hide the NSWindow title bar / close / minimize / resize chrome for
+        // the avatar look. Plugin v1.5.10+. Drag stays via the cursor-anchored
+        // API used by MacRightDragMoveWindow.
+        //
+        // Dispatched onto the AppKit main queue inside the native function, so
+        // the call ordering vs configure_unity_nswindow (kicked off by the
+        // overlay's OnEnable a few lines above) is preserved. configure runs
+        // first → window is located; then borderless flips the styleMask.
+        DisplayXRNative.displayxr_macos_set_window_borderless(1);
+        Debug.Log("[TransparentAutoSetup] macOS NSWindow set borderless.");
+#endif
+    }
+}
+
+/// <summary>
+/// Drives a DisplayXRDisplay rig's virtualDisplayHeight from the
+/// transparent overlay's mouse-wheel delta. Smaller vHeight = more zoom.
+/// The window itself stays put — this is "zoom in window".
+///
+/// Multi-rig safe: only the active rig (per DisplayXRRigManager.ActiveCamera)
+/// consumes the wheel delta. Inactive rigs see 0 because the active one
+/// has already drained the native accumulator that frame.
+/// </summary>
+public class WheelZoomVHeight : MonoBehaviour
+{
+    public DisplayXRTransparentOverlay overlay;
+    public DisplayXRDisplay rig;
+
+    [Tooltip("Multiplicative scale per wheel notch (120 raw units). " +
+             "0.05 = 5% per notch — wheel forward shrinks vHeight (zoom in).")]
+    public float zoomPerNotch = 0.05f;
+
+    [Tooltip("Clamp vHeight so the user can't zoom past sane limits.")]
+    public float minVHeight = 0.05f;
+    public float maxVHeight = 5.0f;
+
+    [Tooltip("Key that resets the zoom (vHeight) to its startup value. Matches " +
+             "DisplayXRInputController's Space reset, which restores pose/scale " +
+             "but NOT the display rig's vHeight.")]
+    public Key resetKey = Key.Space;
+
+    private float m_InitialVHeight;
+    private bool m_CapturedInitial;
+
+    void Update()
+    {
+        if (overlay == null || rig == null) return;
+
+        // Capture the resting vHeight once so Space can restore it.
+        if (!m_CapturedInitial)
+        {
+            m_InitialVHeight = rig.virtualDisplayHeight;
+            m_CapturedInitial = true;
+        }
+
+        // Space resets the zoom (vHeight). Done before the active-rig gate so
+        // this rig's zoom resets even if another rig is currently active.
+        var kb = Keyboard.current;
+        if (kb != null && resetKey != Key.None && kb[resetKey].wasPressedThisFrame)
+            rig.virtualDisplayHeight = m_InitialVHeight;
+
+        // Multi-rig gate: only the active rig drains the wheel accumulator.
+        // ActiveCamera comes from the DisplayXRRigManager static registry —
+        // same source of truth used by the rigs themselves to gate Kooima
+        // tunables. Without this, both rigs would race to ConsumeWheelDelta
+        // and the result would depend on Update execution order.
+        var cam = GetComponent<Camera>();
+        if (cam != null && DisplayXRRigManager.ActiveCamera != cam) return;
+
+        // Don't zoom while the cursor is over the wsui HUD — scrolling over
+        // a slider should not also zoom the scene.
+        if (DisplayXRWindowSpaceUI.IsCursorOverInteractive) {
+            overlay.ConsumeWheelDelta(); // drain to avoid burst on exit
+            return;
+        }
+
+        int delta = overlay.ConsumeWheelDelta();
+        if (delta == 0) return;
+
+        // Win32 WHEEL_DELTA = 120 per notch. Wheel forward (positive) →
+        // factor < 1 → smaller vHeight → cube appears bigger.
+        float notches = delta / 120f;
+        float factor = Mathf.Pow(1f - zoomPerNotch, notches);
+        rig.virtualDisplayHeight = Mathf.Clamp(
+            rig.virtualDisplayHeight * factor, minVHeight, maxVHeight);
+    }
+}
+
+/// <summary>
+/// Adds a BoxCollider to its GameObject sized from the source Renderer's
+/// world-space bounds, converted into local space. Waits a few frames so
+/// SkinnedMeshRenderer.bounds is populated, then self-destructs.
+///
+/// Why not use Renderer.localBounds directly: for Mixamo / cm-source FBXs,
+/// SkinnedMeshRenderer.localBounds is in the mesh's source units and ignores
+/// the FBX import scale, producing a multi-hundred-meter box. renderer.bounds
+/// is the live world-space AABB that respects all transforms.
+/// </summary>
+public class AutoBoxColliderFromRenderer : MonoBehaviour
+{
+    public Renderer source;
+    int m_Frame;
+
+    void LateUpdate()
+    {
+        if (source == null) { Destroy(this); return; }
+        if (++m_Frame < 5) return;
+
+        Bounds b = source.bounds;
+        if (b.size.sqrMagnitude < 1e-6f) return;  // wait for valid bounds
+
+        var box = GetComponent<BoxCollider>();
+        if (box == null) box = gameObject.AddComponent<BoxCollider>();
+
+        Vector3 ls = transform.lossyScale;
+        box.center = transform.InverseTransformPoint(b.center);
+        box.size = new Vector3(
+            b.size.x / Mathf.Max(1e-4f, Mathf.Abs(ls.x)),
+            b.size.y / Mathf.Max(1e-4f, Mathf.Abs(ls.y)),
+            b.size.z / Mathf.Max(1e-4f, Mathf.Abs(ls.z)));
+
+        Debug.Log($"[AutoBoxCollider] {gameObject.name} sized: " +
+                  $"local center={box.center} size={box.size} | world bounds={box.bounds}");
+        Destroy(this);
+    }
+}
+
+/// <summary>
+/// Foreground-only render switch: turns on the plugin's per-view
+/// `clipAtDisplayPlane` tunable on the active rig. The plugin's native
+/// Kooima then overrides each view's projection far_z with that view's
+/// own |eye.z|*m2v (display-centric) or 1/invConvergenceDistance
+/// (camera-centric). Resolves displayxr-unity-test-transparent#2.
+///
+/// Per-view, N-view safe: the native side iterates over all xrLocateViews
+/// outputs (2, 4, 9, ... views depending on render mode) and computes a
+/// fresh far per view — sub-mm eye-Z differences propagate to sub-mm
+/// far differences automatically. C# only sets the flag.
+///
+/// Hit-test stays at full range: Camera.farClipPlane is untouched. The
+/// transparent-overlay hit test (Physics.Raycast + per-triangle bestT
+/// init) still uses farClipPlane in Unity units. Behind-display-plane
+/// geometry: invisible (clipped) AND uninclickable past the bestT init —
+/// "invisible = unclickable" alignment is intentional for foreground-only.
+///
+/// Slider interaction: FarClipDiopterSlider writes Camera.farClipPlane.
+/// With the clip-at-display-plane flag active, the rig still uses
+/// Camera.farClipPlane as the BASE tunables.farZ, but native overrides
+/// it per-view before building the projection. Slider therefore controls
+/// hit-test reach but not rendering. To use the slider as a standalone
+/// diagnostic (slider value drives rendering far again), disable this
+/// component in the inspector.
+/// </summary>
+public class ClipAtDisplayPlane : MonoBehaviour
+{
+    DisplayXRCamera m_CamCentric;
+    DisplayXRDisplay m_DisplayCentric;
+
+    void Awake()
+    {
+        m_CamCentric = GetComponent<DisplayXRCamera>();
+        m_DisplayCentric = GetComponent<DisplayXRDisplay>();
+    }
+
+    void OnEnable()
+    {
+        if (m_DisplayCentric != null) m_DisplayCentric.foregroundOnlyClip = true;
+        if (m_CamCentric != null)     m_CamCentric.foregroundOnlyClip = true;
+        Debug.Log($"[ClipAtDisplayPlane] Enabled foregroundOnlyClip on '{gameObject.name}' " +
+                  $"(display:{m_DisplayCentric != null} cam:{m_CamCentric != null}).");
+    }
+
+    void OnDisable()
+    {
+        // Clearing the flag lets the rig's next LateUpdate push tunables
+        // with clip-at-display-plane = 0 → native goes back to using the
+        // single Camera.farClipPlane for every view's far.
+        if (m_DisplayCentric != null) m_DisplayCentric.foregroundOnlyClip = false;
+        if (m_CamCentric != null)     m_CamCentric.foregroundOnlyClip = false;
+    }
+}

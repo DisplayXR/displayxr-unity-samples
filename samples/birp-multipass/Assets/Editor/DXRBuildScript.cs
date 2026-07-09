@@ -5,7 +5,6 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 public static class BuildScript
 {
@@ -22,14 +21,6 @@ public static class BuildScript
                 if (p.StartsWith("Assets/")) scenes.Add(p);
             }
         }
-
-        // Force D3D12 — the supported API for the DisplayXR Unity plugin.
-        // (A previous version of this script forced D3D11, which silently
-        // reverted the project's D3D12 setting on every batch build and has
-        // known geometry corruption + wrong-aspect capture: runtime#431.)
-        PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneWindows64,
-            new[] { GraphicsDeviceType.Direct3D12 });
-        PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.StandaloneWindows64, false);
 
         // Derive the output name from the project's productName so the build
         // output, BIN_DIR, and installer never drift on a rename.

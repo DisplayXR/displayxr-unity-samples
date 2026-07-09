@@ -40,14 +40,13 @@ internal static class ProtoAutomation
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
 
-        // 3. Ensure the plugin's universal off-axis projection fix is wired (the
-        //    prototype installer moved into the plugin as DisplayXRUrpInstaller —
-        //    #127/#129 Phase 2). Idempotent: the committed URP-Renderer.asset already
-        //    carries it (and the opt-in Full Screen Pass foreground-clip feature +
-        //    its material), so this just re-asserts the projection fix if missing.
-        bool projFix = DisplayXR.Editor.URP.DisplayXRUrpInstaller.InstallProjectionFix(interactive: false);
-        AssetDatabase.SaveAssets();
+        // 3. (Removed) The URP off-axis projection fix is no longer wired here.
+        //    It was replaced in plugin v2.2.0 by the XR display provider handing
+        //    Unity a full projection matrix, so
+        //    DisplayXRUrpInstaller.InstallProjectionFix no longer exists. The
+        //    committed URP-Renderer.asset still carries the opt-in Full Screen Pass
+        //    foreground-clip feature + its material.
 
-        Debug.Log($"[ProtoAutomation] === setup complete (projFix wired={projFix}) ===");
+        Debug.Log("[ProtoAutomation] === setup complete ===");
     }
 }

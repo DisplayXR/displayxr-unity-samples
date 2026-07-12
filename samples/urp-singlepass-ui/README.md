@@ -3,7 +3,7 @@
 Sample for the [DisplayXR Unity plugin](https://github.com/DisplayXR/displayxr-unity)
 on **URP** (single-pass instanced stereo) that exercises the **window-space 2D UI
 overlay** feature (`DisplayXRWindowSpaceUI`, plumbed through
-`XrCompositionLayerWindowSpaceEXT` in the runtime). The scene renders a textured
+`XrCompositionLayerWindowSpaceDXR` in the runtime). The scene renders a textured
 cube on a tracked 3D display and overlays a runtime-built UI panel (IPD slider,
 virtual-display-height slider, render-mode cycle button) as a window-space
 composition layer.

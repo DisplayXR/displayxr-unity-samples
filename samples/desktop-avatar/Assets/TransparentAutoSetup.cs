@@ -14,8 +14,8 @@ using DisplayXR;
 public static class TransparentAutoSetup
 {
     // Must run BEFORE the OpenXR session is created — that's when the runtime
-    // reads transparentBackgroundEnabled off XrWin32WindowBindingCreateInfoEXT
-    // (Windows) / XrCocoaWindowBindingCreateInfoEXT (macOS) and decides
+    // reads transparentBackgroundEnabled off XrWin32WindowBindingCreateInfoDXR
+    // (Windows) / XrCocoaWindowBindingCreateInfoDXR (macOS) and decides
     // whether to use the transparent-capable swapchain path. AfterSceneLoad
     // is too late; SubsystemRegistration fires earlier than the XR loader init.
     //

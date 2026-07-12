@@ -3,7 +3,7 @@
 The **HDRP** counterpart of the URP Single-Pass + 2D UI sample for the
 [DisplayXR Unity plugin](https://github.com/DisplayXR/displayxr-unity). Same
 window-space 2D UI overlay (`DisplayXRWindowSpaceUI` via
-`XrCompositionLayerWindowSpaceEXT`) and single-pass instanced stereo, rendered
+`XrCompositionLayerWindowSpaceDXR`) and single-pass instanced stereo, rendered
 through the High Definition Render Pipeline — used to catch HDRP-specific
 off-axis / projection regressions.
 

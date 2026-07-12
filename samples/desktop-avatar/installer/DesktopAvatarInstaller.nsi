@@ -6,7 +6,7 @@
 !define SAMPLE_PRODUCT_EXE  "DisplayXR-DesktopAvatar"
 !define SAMPLE_DISPLAY_NAME "DisplayXR Unity Sample - Desktop Avatar"
 !define SAMPLE_SLUG         "unity_desktop_avatar"
-!define SAMPLE_DESCRIPTION  "Desktop avatar showcase - alpha-native transparency, click-through, per-eye foreground clip, and XR_EXT_display_zones (3D zone + Local2D speech bubble)."
+!define SAMPLE_DESCRIPTION  "Desktop avatar showcase - alpha-native transparency, click-through, per-eye foreground clip, and XR_DXR_display_zones (3D zone + Local2D speech bubble)."
 
 !ifndef VERSION
     !define VERSION "1.0.0"

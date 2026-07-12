@@ -11,7 +11,7 @@ Guidance for Claude Code when working in this repository.
 
 ## Project Overview
 
-This is the **window-space 2D UI test project** for the displayxr-unity plugin — exercises the `DisplayXRWindowSpaceUI` component, which submits a Unity `Canvas` as an `XrCompositionLayerWindowSpaceEXT` composition layer through the DisplayXR OpenXR runtime. Sibling Unity project that consumes the `com.displayxr.unity` UPM package.
+This is the **window-space 2D UI test project** for the displayxr-unity plugin — exercises the `DisplayXRWindowSpaceUI` component, which submits a Unity `Canvas` as an `XrCompositionLayerWindowSpaceDXR` composition layer through the DisplayXR OpenXR runtime. Sibling Unity project that consumes the `com.displayxr.unity` UPM package.
 
 The scene (`Assets/CubeTest.unity`) renders an animated cube on a tracked 3D display and overlays a **runtime-built tuning panel** (IPD slider, Scale slider, Render Mode cycle button) submitted as a window-space layer. The panel survives without Play Mode — `[ExecuteAlways]` keeps it alive under the editor's standalone preview window flow.
 
@@ -63,7 +63,7 @@ Two test-project scripts plus an editor bootstrap. The plugin contributes the ri
 The mechanism is shared between plugin and test-project:
 
 1. **Layer build (`DisplayXRTuningUI.OnEnable`):** creates a `Canvas` (`ScreenSpaceOverlay` initially), attaches `DisplayXRWindowSpaceUI` with fractional placement (`panelX`, `panelY`, `panelWidth`, `panelHeight`) and a fixed RT resolution of 1024 × 1024. The wsui flips the canvas to `WorldSpace`, parks it at `(0, 100000, 0)` on a hidden layer, and spins up an `OverlayCamera` that renders the canvas into its private RT.
-2. **Composition layer submission (plugin native):** each frame the plugin grabs the RT, hands it to the runtime as an `XrCompositionLayerWindowSpaceEXT` payload, and the runtime composes it on top of the stereo scene with the configured per-eye `disparity`.
+2. **Composition layer submission (plugin native):** each frame the plugin grabs the RT, hands it to the runtime as an `XrCompositionLayerWindowSpaceDXR` payload, and the runtime composes it on top of the stereo scene with the configured per-eye `disparity`.
 3. **Input bridge (`DisplayXRWsuiMouseRouter.Update`):** EventSystem can't see the wsui canvas because it's at world-space-far-away with no main-camera coverage. Router reads cursor coords from `DisplayXRPreviewInput` (editor) or `Input` (built), tests the wsui rect, maps to canvas-pixel coords, and dispatches `pointerDown` / `drag` / `pointerUp` / `pointerClick` directly via `ExecuteEvents`. It also strips any pre-existing `StandaloneInputModule` from `EventSystem.current` — that module throws every frame on the new Input System Package and corrupts EventSystem state for `GraphicRaycaster`.
 4. **Render-mode enumeration:** `DisplayXRTuningUI.TryEnumerateModes` calls `displayxr_standalone_enumerate_rendering_modes` (DllImport on `displayxr_unity`) to populate the cycle button. Retried from `Update` until the standalone session is up. Names come from `displayxr_standalone_get_rendering_mode_name`; synthesized fallback for older runtimes.
 

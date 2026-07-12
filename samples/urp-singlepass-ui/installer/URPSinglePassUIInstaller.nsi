@@ -6,7 +6,7 @@
 !define SAMPLE_PRODUCT_EXE  "DisplayXR-URP-SinglePass-UI"
 !define SAMPLE_DISPLAY_NAME "DisplayXR Unity Sample - URP Single-Pass + 2D UI"
 !define SAMPLE_SLUG         "unity_urp_singlepass_ui"
-!define SAMPLE_DESCRIPTION  "URP single-pass instanced stereo with an XrCompositionLayerWindowSpaceEXT 2D UI overlay - DisplayXR provider test."
+!define SAMPLE_DESCRIPTION  "URP single-pass instanced stereo with an XrCompositionLayerWindowSpaceDXR 2D UI overlay - DisplayXR provider test."
 
 !ifndef VERSION
     !define VERSION "1.0.0"

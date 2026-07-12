@@ -11,9 +11,9 @@ Avatar** feature showcase.
 | Sample | Folder | Render pipeline / mode | Highlights |
 |---|---|---|---|
 | **BiRP Multi-Pass** | `samples/birp-multipass` | Built-in RP, multi-pass stereo | Baseline cube + rig-switching demo |
-| **URP Single-Pass + 2D UI** | `samples/urp-singlepass-ui` | URP, single-pass instanced | `XrCompositionLayerWindowSpaceEXT` 2D UI overlay |
+| **URP Single-Pass + 2D UI** | `samples/urp-singlepass-ui` | URP, single-pass instanced | `XrCompositionLayerWindowSpaceDXR` 2D UI overlay |
 | **HDRP Single-Pass + 2D UI** | `samples/hdrp-singlepass-ui` | HDRP, single-pass instanced | Same UI overlay as URP, on HDRP |
-| **Desktop Avatar** | `samples/desktop-avatar` | URP | Alpha-native transparency, click-through, per-eye foreground clip, `XR_EXT_display_zones` (3D zone + Local2D) |
+| **Desktop Avatar** | `samples/desktop-avatar` | URP | Alpha-native transparency, click-through, per-eye foreground clip, `XR_DXR_display_zones` (3D zone + Local2D) |
 
 ## Prerequisites
 

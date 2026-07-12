@@ -295,8 +295,8 @@ MonoBehaviour:
   nameUi: DisplayXR
   version: 0.1.0
   featureIdInternal: com.displayxr.unity.feature
-  openxrExtensionStrings: XR_EXT_display_info XR_EXT_win32_window_binding XR_EXT_cocoa_window_binding
-    XR_EXT_atlas_capture
+  openxrExtensionStrings: XR_DXR_display_info XR_DXR_win32_window_binding XR_DXR_cocoa_window_binding
+    XR_DXR_atlas_capture
   company: DisplayXR
   priority: 0
   targetOpenXRApiVersion: 

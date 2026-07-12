@@ -16,7 +16,7 @@ using UnityEngine.UI;
 /// simple-window mode), split into two horizontal bands by
 /// <see cref="bubbleBandFraction"/> (default 0.25 = avatar's top-25% bubble /
 /// bottom-75% tiger):
-///   - 3D tiger zone = the bottom band → pushed as the XR_EXT_display_zones
+///   - 3D tiger zone = the bottom band → pushed as the XR_DXR_display_zones
 ///     3D-zone rect (and the legacy canvas sub-rect, for older runtimes /
 ///     the silhouette mapping). The runtime Kooima-frames the tiger into it.
 ///   - 2D bubble band = the top band → a DisplayXRLocal2D layer composited
@@ -376,7 +376,7 @@ public class TigerSpeechBubble : MonoBehaviour
     private void PushCanvasRect(int x, int y, int w, int h)
     {
         if (w <= 0 || h <= 0) return;
-        // XR_EXT_display_zones: push the 3D-zone rect so the runtime Kooima-frames
+        // XR_DXR_display_zones: push the 3D-zone rect so the runtime Kooima-frames
         // the tiger INTO this rect (the rect IS the canvas). The provider drives the
         // zone; the silhouette/click-through separately reads the canvas rect, so
         // push both.

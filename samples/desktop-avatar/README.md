@@ -8,7 +8,7 @@ see-through desktop avatar (cartoon tiger) rendered over the live screen on
 - **Alpha-native transparency** (the avatar composites over whatever is behind it)
 - **Click-through** — input passes to the apps beneath the transparent regions
 - **Per-eye foreground clipping**
-- **`XR_EXT_display_zones`** layout — the avatar is Kooima-projected into a 3D
+- **`XR_DXR_display_zones`** layout — the avatar is Kooima-projected into a 3D
   zone, with a **Local2D** speech-bubble zone alongside it
 
 Part of the [displayxr-unity-samples](https://github.com/DisplayXR/displayxr-unity-samples)

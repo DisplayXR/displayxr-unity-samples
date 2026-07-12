@@ -3,7 +3,7 @@
 //
 // Sample input router for DisplayXRWindowSpaceUI — NOT part of the plugin.
 //
-// `XrCompositionLayerWindowSpaceEXT` submits pixels and lets the runtime
+// `XrCompositionLayerWindowSpaceDXR` submits pixels and lets the runtime
 // composite them; it doesn't carry input. Unity's GraphicRaycaster works on
 // screen-space mouse coords against canvases that live in the screen's
 // coordinate space — but our wsui canvas is a private WorldSpace canvas

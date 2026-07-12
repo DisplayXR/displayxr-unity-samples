@@ -73,7 +73,7 @@ a URP-guarded assembly) so every app gets per-eye URP foreground clip for free.
 ## Validation status (2026-06-14, Win64 / RTX 3080 / D3D12)
 
 Headless build + run on this machine against the installed DisplayXR runtime
-(active OpenXR runtime, advertises **`XR_EXT_view_rig` Version=2**):
+(active OpenXR runtime, advertises **`XR_DXR_view_rig` Version=2**):
 
 - ✅ C# + shader compile clean; `DisplayXR/ForegroundClipURP` is built into the Player.
 - ✅ `URPSetupBootstrap` creates the URP pipeline (depth texture on); Built-in→URP

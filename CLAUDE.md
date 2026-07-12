@@ -11,9 +11,9 @@ former `displayxr-unity-test*` repos (history preserved via `git subtree`).
 
 Samples:
 - `samples/birp-multipass` — Built-in RP, multi-pass stereo. Key `BiRPMultiPass`.
-- `samples/urp-singlepass-ui` — URP single-pass + `XrCompositionLayerWindowSpaceEXT` 2D UI. Key `URPSinglePassUI`.
+- `samples/urp-singlepass-ui` — URP single-pass + `XrCompositionLayerWindowSpaceDXR` 2D UI. Key `URPSinglePassUI`.
 - `samples/hdrp-singlepass-ui` — HDRP single-pass + 2D UI. Key `HDRPSinglePassUI`.
-- `samples/desktop-avatar` — URP Desktop Avatar showcase (transparency, click-through, per-eye foreground clip, `XR_EXT_display_zones`). Key `DesktopAvatar`.
+- `samples/desktop-avatar` — URP Desktop Avatar showcase (transparency, click-through, per-eye foreground clip, `XR_DXR_display_zones`). Key `DesktopAvatar`.
 
 ## The installer is shared — never fork it
 

@@ -3,7 +3,7 @@
 //
 // Input router for TigerTuningHUD's window-space-layer canvas.
 //
-// XrCompositionLayerWindowSpaceEXT submits pixels; it doesn't carry input.
+// XrCompositionLayerWindowSpaceDXR submits pixels; it doesn't carry input.
 // The wsui canvas is a private WorldSpace canvas on a hidden layer at
 // (0, 100000, 0), so Unity's EventSystem can't naturally see clicks on it.
 //

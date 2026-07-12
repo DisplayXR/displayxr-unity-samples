@@ -40,14 +40,14 @@ What we already know (from the v1.3.0 repro, see #82 for the full log tail):
 - In transparent mode, the `FINALv2` projection log shows all-zero values
   (FOV=0°, pos=0,0,0). Possibly a symptom of the same broken composition
   path, possibly unrelated — worth checking either way.
-- `xrCreateSession` injects `XrWin32WindowBindingCreateInfoEXT` with
+- `xrCreateSession` injects `XrWin32WindowBindingCreateInfoDXR` with
   `transparentBackgroundEnabled=1` and a non-zero `chromaKeyColor`. That
   selects the runtime's BitBlt (D3D11) or DComp (D3D12) swapchain path.
 - `wsui_hooked` separately calls `xrCreateSwapchain` for the overlay layer
   with format 28 (`DXGI_FORMAT_R8G8B8A8_UNORM`) and usage `COLOR_ATTACHMENT
   | SAMPLED`. That swapchain isn't part of the transparent BitBlt path.
 - `hooked_xrEndFrame` extends the original layer array with the wsui layer
-  via `XrCompositionLayerWindowSpaceEXT` and forwards to the runtime's
+  via `XrCompositionLayerWindowSpaceDXR` and forwards to the runtime's
   real `xrEndFrame`. The first such forwarded call is what dies.
 
 Probable causes (in rough likelihood order):
@@ -57,7 +57,7 @@ Probable causes (in rough likelihood order):
    transparent path leaves the main swapchain in. The `wsui_copy_to_swapchain_image`
    path in `native~/displayxr_d3d12_backend.cpp` relies on D3D12 common-state
    implicit promotion — may not hold under transparent compositor.
-2. The runtime can't compose an `XrCompositionLayerWindowSpaceEXT` over a
+2. The runtime can't compose an `XrCompositionLayerWindowSpaceDXR` over a
    transparent-background main layer; the layer-mixer code path was only
    exercised against opaque sessions. This would be a runtime-side bug —
    investigation may need to touch `DisplayXR/displayxr-runtime`.

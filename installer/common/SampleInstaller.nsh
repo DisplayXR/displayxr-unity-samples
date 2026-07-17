@@ -175,6 +175,7 @@ Section "${SAMPLE_DISPLAY_NAME}" SecApp
     FileWrite $0 '  "type": "3d",$\r$\n'
     FileWrite $0 '  "category": "sample",$\r$\n'
     FileWrite $0 '  "display_mode": "auto",$\r$\n'
+    FileWrite $0 '  "min_runtime": "${MIN_RUNTIME_VERSION}",$\r$\n'
     FileWrite $0 '  "description": "${SAMPLE_DESCRIPTION}",$\r$\n'
     FileWrite $0 '  "icon": "icon_${SAMPLE_SLUG}.png",$\r$\n'
     FileWrite $0 '  "icon_3d": "icon_sbs_${SAMPLE_SLUG}.png",$\r$\n'

@@ -104,6 +104,14 @@ public class DemoWindowController : MonoBehaviour
 #if UNITY_STANDALONE_WIN
         if (Application.isEditor) return;
 
+        // Workspace-tile mode (#225): the shell/runtime owns the window — it
+        // syncs the hidden window to the tile's 3D-window pixel rect so Kooima
+        // (from the tile pose) matches the render aspect (this is what every
+        // other tile app gets for free). Restoring/persisting our own portrait
+        // size here overrides that cell-resize and mismatches Kooima → the whole
+        // scene stretches. So this window-chrome policy is inert as a tile.
+        if (DisplayXRNative.displayxr_is_shell_mode() != 0) return;
+
         // Remember / restore window size AND position across launches (the split
         // persists separately in TigerSpeechBubble). On the first valid frame,
         // restore the last-saved size + position; thereafter, track changes in

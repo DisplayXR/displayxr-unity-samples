@@ -180,6 +180,11 @@ Section "${SAMPLE_DISPLAY_NAME}" SecApp
     FileWrite $0 '  "icon": "icon_${SAMPLE_SLUG}.png",$\r$\n'
     FileWrite $0 '  "icon_3d": "icon_sbs_${SAMPLE_SLUG}.png",$\r$\n'
     FileWrite $0 '  "icon_3d_layout": "sbs-lr",$\r$\n'
+    ; Unity/engine apps gate their render on the main window being SHOWN, so the
+    ; shell must launch them SW_SHOWMINNOACTIVE (not SW_HIDE) and they read
+    ; xrGetWorkspaceTileSizeDXR for tile size. Opt-in flag consumed by the shell's
+    ; per-app show mode (displayxr-shell-pvt#80). All Unity samples are engine-gated.
+    FileWrite $0 '  "engine_render_gated": true,$\r$\n'
     ${WordReplace} "$INSTDIR" "\" "/" "+" $1
     FileWrite $0 '  "exe_path": "$1/${APP_EXE}"$\r$\n'
     FileWrite $0 '}$\r$\n'

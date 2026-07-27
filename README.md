@@ -15,8 +15,45 @@ Avatar** feature showcase.
 | **HDRP Single-Pass + 2D UI** | `samples/hdrp-singlepass-ui` | HDRP, single-pass instanced | Same UI overlay as URP, on HDRP |
 | **Desktop Avatar** | `samples/desktop-avatar` | URP | Alpha-native transparency, click-through, per-eye foreground clip, `XR_DXR_display_zones` (3D zone + Local2D) |
 
+## Cloning — install Git LFS *first*
+
+The Desktop Avatar sample's tiger model
+(`samples/desktop-avatar/Assets/cartoon-tiger-in-witches-hat/source/*.fbx`, 2.4 MB)
+is the one **Git LFS**–tracked file in this repo. Install the LFS filters before
+you clone:
+
+```bash
+git lfs install     # once per machine
+git clone https://github.com/DisplayXR/displayxr-unity-samples.git
+```
+
+**Without git-lfs, `git clone` still succeeds with exit 0** — you just get a
+130-byte text pointer where the FBX should be, and Unity silently fails to
+import it: the avatar is simply missing from the scene, with no error naming
+LFS. Check with:
+
+```bash
+ls -l "samples/desktop-avatar/Assets/cartoon-tiger-in-witches-hat/source/cartoon tiger in witches hat_ rigged and animated.fbx"
+```
+
+2.4 MB is correct; ~130 bytes means the object was never fetched. Repair an
+existing clone in place — no re-clone needed:
+
+```bash
+git lfs install
+git lfs pull
+```
+
+If `git lfs pull` instead **hangs or times out**, that's a network block, not a
+missing tool: LFS objects are served from `github-cloud.s3.amazonaws.com`, a
+different host than `github.com`, and it is throttled or blocked on some
+corporate and regional networks even when the git clone itself works fine. In
+that case obtain the FBX out of band and drop it at the path above — nothing
+else in the repo is LFS-tracked.
+
 ## Prerequisites
 
+- **Git LFS** (`git lfs install`) — see [Cloning](#cloning--install-git-lfs-first) above.
 - The **DisplayXR runtime** installed (the installers hard-require it; floor 1.26.1).
 - **Unity** matching each sample's `ProjectSettings/ProjectVersion.txt`.
 - **NSIS** (for building installers) at `C:\Program Files (x86)\NSIS\`.

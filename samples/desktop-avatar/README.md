@@ -10,6 +10,21 @@ see-through desktop avatar (cartoon tiger) rendered over the live screen on
 - **Per-eye foreground clipping**
 - **`XR_DXR_display_zones`** layout — the avatar is Kooima-projected into a 3D
   zone, with a **Local2D** speech-bubble zone alongside it
+- **Head-tracked billboard** — the tiger turns to face you as you move in front
+  of the display (yaw-only), driven by the eye tracker
+
+## Controls
+
+| Key / input | Effect |
+|-------------|--------|
+| **F** | Turn the head-tracked billboard **off** (it is on at startup) and restore the tiger's rotation |
+| **Left-drag** on the tiger | Rotate it by hand |
+| **Right-drag** | Move the application window |
+| **Scroll** | Zoom (display rig's virtual display height) |
+| **W / S** | Push the tiger in / out of the display plane |
+| **Tab** | Cycle rig cameras |
+| **Space** | Reset the tiger's orientation |
+| **Esc** | Quit |
 
 Part of the [displayxr-unity-samples](https://github.com/DisplayXR/displayxr-unity-samples)
 monorepo — see the [root README](../../README.md) for prerequisites and the

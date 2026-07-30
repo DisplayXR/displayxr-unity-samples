@@ -44,7 +44,7 @@ All test-project components are runtime-wired by `TransparentAutoSetup` — ther
 | `WheelZoomVHeight` | `Assets/TransparentAutoSetup.cs` (nested) | Scroll-wheel → `DisplayXRDisplay.virtualDisplayHeight`. Display-centric only. Active-rig gated (only the focused rig drains the wheel accumulator). |
 | `LockToForwardAxis` | `Assets/LockToForwardAxis.cs` | **Tiger-branch tweak.** Locks the rig camera's world X/Y to its startup values each `Update`, after the plugin's `DisplayXRInputController` has moved it. Net effect: AQDE keys become no-ops, only W/S still push the camera in/out (so only the in/out-of-display-plane axis is user-controllable). Uses `[DefaultExecutionOrder(int.MaxValue)]` to run after the plugin's input controller. |
 | `ClipAtDisplayPlane` | `Assets/TransparentAutoSetup.cs` (nested) | **Work in progress.** Currently hooks `Camera.onPreCull` and rewrites the per-eye stereo projection's `m22`/`m23` (near/far elements) to clip at raw eye-Z. Tiger renders but the clip doesn't visibly take effect. See `docs~/handoff-foreground-clipping.md` and issue #2. |
-| `TigerFaceViewer` | `Assets/TigerFaceViewer.cs` | **Optional head-tracked billboard + A/B probe for plugin #236.** Press **F** to make the tiger turn toward the tracked viewer. Head comes from `DisplayXRProvider.TryGetViewerHead()`; the once-per-second log prints that source *and* the broken `Camera.GetStereoViewMatrix()` route side by side (see below). Self-installs via `[RuntimeInitializeOnLoadMethod]` — no scene wiring. Off by default. |
+| `TigerFaceViewer` | `Assets/TigerFaceViewer.cs` | **Head-tracked billboard (yaw-only), ON by default** — the tiger turns to face the tracked viewer; press **F** to turn it off and restore its authored rotation. Yaw math is ported 1:1 from the native reference (see below). The once-per-second log prints every viewer-position source side by side, which is also the A/B probe for plugin #236. Self-installs via `[RuntimeInitializeOnLoadMethod]` — no scene wiring. |
 | `AutoBoxColliderFromRenderer` | `Assets/TransparentAutoSetup.cs` (nested) | Deferred BoxCollider sizing for **non-SMR** clickables (the cube fallback). Waits for `renderer.bounds` to be valid (a few frames), then sizes the box. Skipped for `SkinnedMeshRenderer` — the plugin handles those per-triangle. |
 
 ## How transparency + clickthrough work
@@ -57,28 +57,57 @@ The mechanism splits across plugin (most of it) and test-project (small bootstra
 4. **Per-pixel click-through** — `WM_NCHITTEST` in the native overlay reads `s_hit_active` (set by the C# polling code each frame). When the cyclopean ray hits the tiger silhouette → `s_hit_active=1` → `HTCLIENT` → overlay captures. Otherwise `HTTRANSPARENT` → click forwards to the underlying app via `forward_click_to_underlying_window` (`SetForegroundWindow` + `PostMessage`).
 5. **Hit testing** uses **per-triangle ray-tri** (Möller-Trumbore) against `SkinnedMeshRenderer.BakeMesh()` output, transformed via `Matrix4x4.TRS(smr.position, smr.rotation, Vector3.one)` — position + rotation only, no scale (BakeMesh's output is already in world units). 8-frame hysteresis smooths over silhouette-edge sub-pixel jitter. Active-rig gate prevents the two rigs from flapping `s_hit_active`. Implemented entirely in the plugin; the test project just sets `clickableRenderers` to the SMR.
 
-## Viewer head position: use the provider, not `Camera.GetStereoViewMatrix` (plugin #236)
+## Head-coupled effects: work in PHYSICAL space, not world space
 
-`Camera.GetStereoViewMatrix(Left/Right)` returns the **same (mono) matrix for both
-eyes** under the display provider. Unity's C#-side stereo matrix cache is only
-written by `Camera.SetStereoViewMatrix()`, which the plugin does not call in
-provider mode — the per-eye poses reach Unity through the native frame desc
-(`deviceAnchorToEyePose`) and are consumed inside Unity's render loop, never
-round-tripped back into the C# camera. Any head-coupled effect built on it silently
-freezes; that's how the plugin's own Face Viewer sample shipped broken in v2.8.3
-([plugin #236](https://github.com/DisplayXR/displayxr-unity/issues/236)).
+**Billboard yaw is computed in raw display space, not Unity world space.** This is
+the single most important lesson from building `TigerFaceViewer`, and it mirrors the
+viewer-confirmed native reference in
+[`displayxr-demo-avatar`](https://github.com/DisplayXR/displayxr-demo-avatar)
+(`windows/main.cpp`, "Face-the-viewer billboard"):
 
-Correct sources, all live per-frame:
+```csharp
+// head centroid in metres, origin = physical panel centre, viewer at +Z
+float hzAbs    = Mathf.Max(Mathf.Abs(hz), 1e-3f);
+float targetYaw = FACE_YAW_SIGN * Mathf.Atan2(hx, hzAbs) * Mathf.Rad2Deg;  // FACE_YAW_SIGN = -1
+```
+
+Typical live values: `hz` ~0.5 m, `hx` ±0.12 m → ±14° of yaw.
+
+Why not world space: on the **display-centric rig, scale-as-zoom inflates world
+units**, so the same head reads as `ipd≈1.2` world units against a physical 0.06 m —
+and any reference vector you build from scene objects inherits the scene's layout.
+Two world-space attempts failed here: one keyed off `(camera − tiger)`, which
+collapses because the tiger's root sits at the camera's x/z; the other picked its
+target with `FindAnyObjectByType<DragRotateCube>()` and silently rotated the
+**invisible fallback cube** (`TransparentAutoSetup` wires one onto every target
+root — the tiger *and* `Cube`). Physical space has neither failure mode.
+
+Smoothing is time-based exponential (`tau = 0.04 s`), and the heading only chases
+while eye tracking is **locked** — warmup positions jitter it.
+
+Viewer-position sources, all live per-frame:
 
 | API | Space | Use for |
 |-----|-------|---------|
-| `DisplayXRProvider.TryGetViewerHead` / `TryGetViewerEyes` | Unity **world** | world-space head-coupled effects (billboards, lean-to-zoom, parallax) |
+| `DisplayXRNative.displayxr_get_eye_positions` | **physical metres**, panel-centre origin, viewer at +Z | **head-coupled effects — start here** (what the billboard uses) |
+| `DisplayXRProvider.TryGetViewerHead` / `TryGetViewerEyes` | Unity **world** (v2.9.1+) | when the effect genuinely needs scene-space coordinates |
 | `DisplayXRNative.displayxr_get_stereo_matrices` | per-eye view + proj | cyclopean hit-test, off-axis probes (`KooimaProbe`) |
-| `DisplayXRNative.displayxr_get_eye_positions` | **physical metres**, panel-centre origin | effects that must be expressed in real-world units |
 
-`TigerFaceViewer` (press **F**) is the on-hardware check: its log line carries both
-the provider head and the `GetStereoViewMatrix` readback with an `eyesEqual` flag,
-so the fix and the original defect are both visible in one line.
+Not ported from the reference: the **zone-canvas rebase**, which offsets `hx` by the
+window's centre on the panel. Without it the heading references the *panel* centre
+rather than the *window* centre — a constant bias when the window is off-centre, not
+a tracking failure.
+
+### On `Camera.GetStereoViewMatrix` (plugin #236)
+
+[Plugin #236](https://github.com/DisplayXR/displayxr-unity/issues/236) reports it
+returning the **same matrix for both eyes** under the provider, which silently
+freezes anything built on it. The plugin never writes that cache
+(`Camera.SetStereoViewMatrix` went away with the #166 provider migration). But note:
+**it does NOT reproduce in a built player here** — `TigerFaceViewer`'s log reads
+`eyesEqual=False` on Windows/D3D12, with values matching the provider's exactly. So
+the failure is configuration-specific (editor vs player, Unity version), not
+universal. Use the physical or provider APIs above and the question doesn't arise.
 
 ## Tiger asset facts
 
@@ -114,12 +143,13 @@ After Build And Run for Windows:
 6. **W / S** keys → camera (and therefore the tiger relative to the display) push in/out of the display plane.
 7. **A / Q / D / E** keys → no effect (locked by `LockToForwardAxis`).
 8. Tab → cycles between Main Camera (display rig) and Cam Centric (camera rig); `DragRotateCube` rebinds its listeners automatically.
-9. **F** → head-tracked billboard on (`TigerFaceViewer`). Move your head left/right in
-   front of the panel: the tiger should turn to follow you, and the once-per-second
-   log should show `provider ok=True` with L/R eyes ~0.06 m apart and a `head=` x
-   that tracks your movement. `eyesEqual=True` on the `Camera.GetStereoViewMatrix`
-   half of the line is the expected (broken) reading — that's plugin #236 reproduced
-   next to its fix. Press **F** again to restore the tiger's rotation.
+9. **Head-tracked billboard is ON at startup** (`TigerFaceViewer`). Move your head
+   left/right in front of the panel: the tiger turns to follow you. The
+   once-per-second log should read like
+   `rawHead (-0.115,0.111,0.509)m tracked=True -> targetYaw=12.4 yaw=11.8deg on
+   cartoon tiger…` — i.e. `hz` ~0.5 m, `hx` ±0.12 m, yaw ±14°, on the **tiger**
+   (if the target name is `Cube`, it grabbed the invisible fallback fixture).
+   Press **F** to turn it off and restore the authored rotation.
 
 ## Open issues
 

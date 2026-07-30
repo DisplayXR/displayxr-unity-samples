@@ -1,34 +1,42 @@
 // Copyright 2024-2026, DisplayXR contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// Optional head-tracked billboard for the tiger + A/B probe for the two ways an
-// app can ask "where is the viewer?" (plugin issue #236).
+// Optional head-tracked billboard for the tiger (yaw-only) + A/B probe for the
+// ways an app can ask "where is the viewer?" (plugin issue #236).
 //
-// Why this exists: the plugin's Face Viewer (Billboard) sample shipped in v2.8.3
-// reading the head from Camera.GetStereoViewMatrix(Left/Right). That cache is
-// only written by Camera.SetStereoViewMatrix(), which the plugin does NOT call in
-// provider mode — the per-eye poses reach Unity through the native frame desc
-// (deviceAnchorToEyePose) and are consumed inside Unity's render loop, never
-// round-tripped back into the C# camera. So both eyes read back the same (mono)
-// matrix and the billboard never moves. The fix is
-// DisplayXRProvider.TryGetViewerHead(), which reads the provider's own
-// render-ready per-eye positions.
+// The yaw math mirrors the native reference implementation in
+// displayxr-demo-avatar (windows/main.cpp, "Face-the-viewer billboard") 1:1,
+// because that one is viewer-confirmed on hardware:
 //
-// desktop-avatar is the sample that can actually prove this: it runs on a real
-// tracking display with a transparent overlay, so a head-coupled turn is visible
-// at arm's length. Press F to toggle billboarding; the once-per-second log prints
-// BOTH sources side by side so the broken-vs-fixed delta is captured in the log
-// even without hardware eyes on the tiger.
+//     targetYaw = FACE_YAW_SIGN * atan2(hx, |hz|)
 //
-// Turning is expressed as a *delta from the tiger's authored rotation*, derived
-// from the yaw between (tiger -> rig camera) and (tiger -> viewer head), so it
-// makes no assumption about which local axis is the tiger's face. `gain`
-// exaggerates the turn — real head travel in front of a desktop panel subtends a
-// small angle, and 2-3x makes the effect unmistakable in a demo.
+// with (hx, hz) = the head centroid in RAW DISPLAY SPACE — metres, origin at the
+// physical panel centre, viewer at +Z — from displayxr_get_eye_positions. That is
+// deliberately NOT the world-space render-ready eyes: physical space is
+// independent of where the rig, camera and model sit in the scene, and immune to
+// the display rig's scale-as-zoom (which inflates world-space distances, e.g. a
+// 0.06 m IPD reads as ~1.2 world units here). Two earlier attempts to derive the
+// angle in world space failed exactly there — one silently rotated the wrong
+// object, the next found its reference vector degenerate because the tiger's root
+// sits at the camera's x/z.
+//
+// Smoothing is the reference's time-based exponential (tau), and the heading only
+// chases while eye tracking is LOCKED — warmup positions jitter the heading.
+//
+// The once-per-second log still prints the world-space provider API
+// (DisplayXRProvider.TryGetViewerEyes, new in v2.9.1) next to the raw physical
+// eyes and to Camera.GetStereoViewMatrix, so the sources stay comparable — that
+// A/B is the point of the probe for issue #236.
 //
 // Auto-installs via RuntimeInitializeOnLoadMethod (the KooimaProbe pattern), so
 // it needs no scene edit. Off by default — press F.
+//
+// Not ported from the reference: the zone-canvas rebase (it offsets hx by the
+// window's centre on the panel for off-centre windows). Without it the heading is
+// referenced to the PANEL centre rather than the window centre — a constant bias
+// when the window is off-centre, not a tracking failure.
 
+using System;
 using DisplayXR;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -36,18 +44,29 @@ using UnityEngine.InputSystem;
 [DisallowMultipleComponent]
 public class TigerFaceViewer : MonoBehaviour
 {
-    [Tooltip("Toggles head-tracked billboarding on/off.")]
+    [Tooltip("Toggles head-tracked billboarding on/off. On by default, so F " +
+             "turns it OFF and restores the tiger's authored rotation.")]
     public Key toggleKey = Key.F;
 
-    [Tooltip("Multiplies the viewer's off-axis angle. 1 = physically faithful; " +
-             "2-3 exaggerates the turn so it reads clearly in a demo.")]
-    public float gain = 2.5f;
+    [Tooltip("Billboard from startup. The tiger's DragRotateCube is wired by " +
+             "TransparentAutoSetup at AfterSceneLoad, same phase as this " +
+             "component, so enabling retries until the target exists.")]
+    public bool startEnabled = true;
 
-    [Tooltip("Turn rate in degrees per second. 0 = snap instantly.")]
-    public float turnSpeed = 180f;
+    [Tooltip("Yaw direction. -1 matches the viewer-confirmed native reference " +
+             "(displayxr-demo-avatar FACE_YAW_SIGN); flip to +1 if the tiger " +
+             "turns away from you instead of toward you.")]
+    public float yawSign = -1f;
 
-    [Tooltip("Clamp on the applied yaw delta (degrees), so a bad head reading " +
-             "can't spin the tiger backwards.")]
+    [Tooltip("Multiplies the viewer's off-axis angle. 1 = physically faithful " +
+             "(what the native reference does); >1 exaggerates for a demo.")]
+    public float gain = 1f;
+
+    [Tooltip("Smoothing time constant in seconds (settle ~= 3x tau). Matches the " +
+             "reference's 0.04. Time-based, so it is frame-rate independent.")]
+    public float tau = 0.04f;
+
+    [Tooltip("Clamp on the applied yaw (degrees).")]
     public float maxYawDegrees = 60f;
 
     [Tooltip("Seconds between A/B probe log lines. 0 = don't log.")]
@@ -55,9 +74,14 @@ public class TigerFaceViewer : MonoBehaviour
 
     private Transform m_Tiger;
     private Quaternion m_BaseRotation;
-    private Vector3 m_RefToCam;          // tiger -> camera at enable time, yaw plane
     private bool m_Enabled;
     private float m_Timer;
+    private float m_Yaw;             // smoothed, applied
+    private float m_TargetYaw;       // pre-smoothing, for the log
+    private bool m_UserTurnedOff;    // an explicit F press wins over startEnabled
+    private float m_RetryTimer;
+
+    private static bool s_RawMissing;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void AutoInstall()
@@ -66,19 +90,36 @@ public class TigerFaceViewer : MonoBehaviour
         var go = new GameObject("TigerFaceViewer");
         DontDestroyOnLoad(go);
         go.AddComponent<TigerFaceViewer>();
-        Debug.Log("[TigerFaceViewer] installed (press F to toggle head-tracked billboard).");
+        Debug.Log("[TigerFaceViewer] installed — head-tracked billboard ON by default (press F to turn it off).");
     }
 
     void Update()
     {
         var kb = Keyboard.current;
         if (kb != null && toggleKey != Key.None && kb[toggleKey].wasPressedThisFrame)
+        {
+            m_UserTurnedOff = m_Enabled;   // F while on = the user wants it off
             Toggle();
+        }
+
+        // Auto-enable at startup. TransparentAutoSetup adds the tiger's
+        // DragRotateCube in the same AfterSceneLoad phase we install in, and the
+        // order between them is undefined — so retry rather than assume the
+        // target exists on frame one. Throttled: FindObjectsByType is not free.
+        if (startEnabled && !m_Enabled && !m_UserTurnedOff)
+        {
+            m_RetryTimer -= Time.deltaTime;
+            if (m_RetryTimer <= 0f)
+            {
+                m_RetryTimer = 0.25f;
+                if (FindTiger() != null) Toggle();
+            }
+        }
 
         if (logInterval > 0f && m_Enabled)
         {
             m_Timer += Time.deltaTime;
-            if (m_Timer >= logInterval) { m_Timer = 0f; LogBothSources(); }
+            if (m_Timer >= logInterval) { m_Timer = 0f; LogSources(); }
         }
     }
 
@@ -93,26 +134,23 @@ public class TigerFaceViewer : MonoBehaviour
         }
 
         m_Tiger = FindTiger();
-        var cam = ActiveCamera();
-        if (m_Tiger == null || cam == null)
+        if (m_Tiger == null)
         {
-            Debug.LogWarning("[TigerFaceViewer] no tiger (DragRotateCube) or no active " +
-                             "rig camera found — staying off.");
+            Debug.LogWarning("[TigerFaceViewer] no DragRotateCube target found — staying off.");
             return;
         }
 
         m_BaseRotation = m_Tiger.rotation;
-        m_RefToCam = YawPlane(cam.transform.position - m_Tiger.position);
-        if (m_RefToCam.sqrMagnitude < 1e-6f)
-        {
-            Debug.LogWarning("[TigerFaceViewer] tiger sits on the camera axis — " +
-                             "no yaw reference, staying off.");
-            return;
-        }
+        m_Yaw = 0f;
         m_Enabled = true;
         m_Timer = logInterval; // log immediately
-        Debug.Log($"[TigerFaceViewer] ON  gain={gain:F1} tiger={m_Tiger.name} " +
-                  $"cam={cam.name} eyeTracked={DisplayXRProvider.IsEyeTracked}");
+
+        var rend = m_Tiger.GetComponentInChildren<Renderer>(true);
+        bool raw = TryGetRawHead(out float hx, out float hy, out float hz, out bool tracked);
+        Debug.Log($"[TigerFaceViewer] ON  target={m_Tiger.name} " +
+                  $"renderer={(rend != null ? rend.GetType().Name + "/" + rend.name : "<none>")} " +
+                  $"pos={Fmt(m_Tiger.position)} yawSign={yawSign} gain={gain:F1} " +
+                  $"| rawHead ok={raw} ({hx:F3},{hy:F3},{hz:F3}) tracked={tracked}");
     }
 
     void LateUpdate()
@@ -120,24 +158,33 @@ public class TigerFaceViewer : MonoBehaviour
         // LateUpdate so we win over the Animator (which runs earlier in the frame)
         // and over DragRotateCube's drag rotation while this mode is on.
         if (!m_Enabled || m_Tiger == null) return;
-        if (!DisplayXRProvider.TryGetViewerHead(out Vector3 head)) return;
+        if (!TryGetRawHead(out float hx, out float _, out float hz, out bool tracked)) return;
 
-        Vector3 toHead = YawPlane(head - m_Tiger.position);
-        if (toHead.sqrMagnitude < 1e-6f) return;
+        // Reference math, 1:1: yaw from the head's lateral offset over its
+        // distance to the panel. |hz| guarded so a viewer in the panel plane
+        // can't blow the angle up.
+        float hzAbs = Mathf.Max(Mathf.Abs(hz), 1e-3f);
+        m_TargetYaw = Mathf.Clamp(yawSign * Mathf.Atan2(hx, hzAbs) * Mathf.Rad2Deg * gain,
+                                  -maxYawDegrees, maxYawDegrees);
 
-        float yaw = Vector3.SignedAngle(m_RefToCam, toHead, Vector3.up) * gain;
-        yaw = Mathf.Clamp(yaw, -maxYawDegrees, maxYawDegrees);
+        // Time-based exponential smoothing (frame-rate independent). Only chase
+        // while tracking is locked — warmup positions jitter the heading.
+        if (tracked)
+        {
+            float a = Mathf.Clamp01(1f - Mathf.Exp(-Time.deltaTime / Mathf.Max(tau, 1e-4f)));
+            m_Yaw = Mathf.LerpAngle(m_Yaw, m_TargetYaw, a);
+        }
 
-        Quaternion target = Quaternion.AngleAxis(yaw, Vector3.up) * m_BaseRotation;
-        m_Tiger.rotation = turnSpeed <= 0f
-            ? target
-            : Quaternion.RotateTowards(m_Tiger.rotation, target, turnSpeed * Time.deltaTime);
+        m_Tiger.rotation = Quaternion.AngleAxis(m_Yaw, Vector3.up) * m_BaseRotation;
     }
 
-    // Print the fixed source and the broken one together, so a single log line
-    // shows why #236 happened and that the fix is live.
-    void LogBothSources()
+    // Print every viewer-position source together: the raw physical eyes that
+    // drive the billboard, the world-space provider API (new in v2.9.1), and the
+    // Camera.GetStereoViewMatrix readback that issue #236 was filed about.
+    void LogSources()
     {
+        bool raw = TryGetRawHead(out float hx, out float hy, out float hz, out bool tracked);
+
         bool okProv = DisplayXRProvider.TryGetViewerEyes(out Vector3 pl, out Vector3 pr);
         Vector3 pHead = okProv ? (pl + pr) * 0.5f : Vector3.zero;
 
@@ -151,16 +198,40 @@ public class TigerFaceViewer : MonoBehaviour
         }
         bool camEyesEqual = stereo && (sl - sr).sqrMagnitude < 1e-10f;
 
-        Debug.Log($"[TigerFaceViewer] provider ok={okProv} " +
-                  $"L={Fmt(pl)} R={Fmt(pr)} head={Fmt(pHead)} ipd={(pr - pl).magnitude:F4} " +
-                  $"| Camera.GetStereoViewMatrix stereo={stereo} " +
-                  $"L={Fmt(sl)} R={Fmt(sr)} eyesEqual={camEyesEqual} " +
+        Debug.Log($"[TigerFaceViewer] rawHead ok={raw} ({hx:F3},{hy:F3},{hz:F3})m tracked={tracked} " +
+                  $"-> targetYaw={m_TargetYaw:F1} yaw={m_Yaw:F1}deg on {(m_Tiger != null ? m_Tiger.name : "<none>")} " +
+                  $"| provider(world) ok={okProv} head={Fmt(pHead)} ipd={(pr - pl).magnitude:F4} " +
+                  $"| GetStereoViewMatrix stereo={stereo} eyesEqual={camEyesEqual} " +
                   $"| eyeTracked={DisplayXRProvider.IsEyeTracked}");
     }
 
-    static string Fmt(Vector3 v) => $"({v.x:F3},{v.y:F3},{v.z:F3})";
+    // Head centroid in RAW DISPLAY SPACE: metres, origin at the physical panel
+    // centre, +X right, +Y up, viewer at +Z. Same channel the Scene-view eye
+    // gizmo uses (DisplayXRGizmoHelpers.TryGetLiveRawEyes) and the same one the
+    // native reference billboards from.
+    static bool TryGetRawHead(out float hx, out float hy, out float hz, out bool tracked)
+    {
+        hx = 0f; hy = 0f; hz = 0f; tracked = false;
+        if (s_RawMissing) return false;
+        try
+        {
+            DisplayXRNative.displayxr_get_eye_positions(
+                out float lx, out float ly, out float lz,
+                out float rx, out float ry, out float rz,
+                out int isTracked);
+            hx = (lx + rx) * 0.5f;
+            hy = (ly + ry) * 0.5f;
+            hz = (lz + rz) * 0.5f;
+            tracked = isTracked != 0;
+            // All-zero = the runtime hasn't filled the raw channel yet.
+            if (hx == 0f && hy == 0f && hz == 0f) return false;
+            return true;
+        }
+        catch (DllNotFoundException) { s_RawMissing = true; return false; }
+        catch (EntryPointNotFoundException) { s_RawMissing = true; return false; }
+    }
 
-    static Vector3 YawPlane(Vector3 v) { v.y = 0f; return v; }
+    static string Fmt(Vector3 v) => $"({v.x:F3},{v.y:F3},{v.z:F3})";
 
     static Camera ActiveCamera()
     {
@@ -168,12 +239,23 @@ public class TigerFaceViewer : MonoBehaviour
         return cam != null ? cam : Camera.main;
     }
 
-    // The tiger is whatever DragRotateCube is attached to — that component owns
-    // the tiger's rotation for mouse drag, so it is the authoritative handle
-    // (avoids hard-coding a scene object name).
+    // DragRotateCube owns each target's drag rotation, so it is the handle we
+    // want — but TransparentAutoSetup wires one onto EVERY target root, which is
+    // the tiger AND the legacy fallback cube. FindAnyObjectByType returns an
+    // arbitrary one, and picking the cube silently rotates an invisible fixture
+    // while the tiger sits still (looks exactly like "head tracking is dead").
+    // Prefer the skinned mesh — that's the tiger, and it needs no name match.
     static Transform FindTiger()
     {
-        var drag = FindAnyObjectByType<DragRotateCube>();
-        return drag != null ? drag.transform : null;
+        var drags = FindObjectsByType<DragRotateCube>();
+        if (drags == null || drags.Length == 0) return null;
+        foreach (var d in drags)
+            if (d.target is SkinnedMeshRenderer) return d.transform;
+        // No skinned mesh (cube-only fallback scene): take the first target that
+        // is actually being drawn.
+        foreach (var d in drags)
+            if (d.target != null && d.target.enabled && d.target.gameObject.activeInHierarchy)
+                return d.transform;
+        return drags[0].transform;
     }
 }

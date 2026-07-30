@@ -65,6 +65,9 @@ public class TigerSpeechBubble : MonoBehaviour
     // fresh install / partner starts here, not at the avatar 0.25 / 1000x1500).
     // Per-user changes still persist on top via PlayerPrefs.
     private const float kDefaultBubbleBandFraction = 0.33f;
+    // Cosmetic edge feather radius (client-window px) for the 3D zone's edge —
+    // the zone-vs-band transition (unity#238; opt-in since runtime spec v3).
+    private const float kZoneEdgeFeatherPx = 16f;
     // ProjectSettings born-windowed default (840x1448) — fallback when Screen.* is
     // not yet populated at SubsystemRegistration time.
     private const int kDefaultPanelW = 840;
@@ -132,10 +135,20 @@ public class TigerSpeechBubble : MonoBehaviour
             // zone-sized.
             DisplayXR.DisplayXRProvider.SetZoneRect(0, splitY, z0w, panelH - splitY);
 
+            // Soft zone-vs-band edge (unity#238): zone edges are HARD by default
+            // since runtime display-zones spec v3 (runtime#800) — the avatar wants
+            // its tiger zone feathered into the bubble band, so it opts in with an
+            // explicit radius (the pre-v3 implicit look was 16 px). Cosmetic only:
+            // the hardware wish stays binary; pre-v3 runtimes ignore the request.
+            try { DisplayXR.DisplayXRProvider.SetZoneFeather(0, kZoneEdgeFeatherPx); }
+            catch (System.EntryPointNotFoundException) { } // older plugin DLL
+
             if (s_MultiZone)
             {
                 DisplayXR.DisplayXRProvider.SetZoneCount(2);
                 DisplayXR.DisplayXRProvider.SetZone(1, 2, panelW / 2, splitY, panelW - panelW / 2, panelH - splitY);
+                try { DisplayXR.DisplayXRProvider.SetZoneFeather(1, kZoneEdgeFeatherPx); }
+                catch (System.EntryPointNotFoundException) { }
                 Debug.Log($"[TigerSpeechBubble] MULTI-ZONE: zone0=bottom-left(0,{splitY},{panelW / 2},{panelH - splitY}) " +
                           $"zone1=bottom-right({panelW / 2},{splitY},{panelW - panelW / 2},{panelH - splitY})");
             }

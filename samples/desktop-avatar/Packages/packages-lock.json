@@ -7,7 +7,7 @@
       "dependencies": {
         "com.unity.xr.management": "4.4.0"
       },
-      "hash": "3c4ca06f3eeb87bf3236d13c50597986d8cc7353"
+      "hash": "1bbd142ff993371d0d54f221bfe66b031f04ee01"
     },
     "com.unity.burst": {
       "version": "1.8.28",

@@ -93,10 +93,30 @@ Viewer-position sources, all live per-frame:
 | `DisplayXRProvider.TryGetViewerHead` / `TryGetViewerEyes` | Unity **world** (v2.9.1+) | when the effect genuinely needs scene-space coordinates |
 | `DisplayXRNative.displayxr_get_stereo_matrices` | per-eye view + proj | cyclopean hit-test, off-axis probes (`KooimaProbe`) |
 
-Not ported from the reference: the **zone-canvas rebase**, which offsets `hx` by the
-window's centre on the panel. Without it the heading references the *panel* centre
-rather than the *window* centre — a constant bias when the window is off-centre, not
-a tracking failure.
+### Rebase to the ZONE canvas, or dragging the avatar does nothing
+
+The raw eyes are **panel-centre** relative, so on their own they carry no information
+about where the avatar sits on screen: drag the window and the yaw doesn't budge. The
+heading must be rebased to the **zone canvas** centre (the reference's zone-canvas
+rebase):
+
+```csharp
+pxSizeX    = panelWidthM / panelWidthPx;
+canvasCxPx = canvasRect.x + canvasRect.w / 2;
+hx        -= (canvasCxPx - panelWidthPx / 2) * pxSizeX;
+```
+
+`DisplayXRNative.displayxr_get_kooima_canvas` is **the zone canvas**, not merely the
+window rect — the provider chains `XrDisplayZoneDXR` onto the *primary* `xrLocateViews`
+in front of the rig ("the rect IS the canvas", `displayxr_provider_session.cpp`), and
+the `XrViewDisplayRawDXR` raw channel that fills `canvasRectPx` rides on that same
+zone-scoped locate. So it already equals what the native reference obtains from its
+separate zone-scoped locate. With no zone active it degrades to the full window, which
+is the right reference then. `TigerFaceViewer` logs `geometry: canvas … | zone0 …` each
+tick so this stays checkable — canvas extent should equal the primary zone's extent.
+
+Measured on hardware, viewer stationary, window dragged left → centre → right:
+`canvasDx` −0.127 → −0.001 → +0.126 m, yaw −12.4° → +4.2° → +20.4°.
 
 ### On `Camera.GetStereoViewMatrix` (plugin #236)
 

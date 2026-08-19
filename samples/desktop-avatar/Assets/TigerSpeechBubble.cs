@@ -256,6 +256,7 @@ public class TigerSpeechBubble : MonoBehaviour
             PlayerPrefs.SetFloat(kBandPrefKey, bubbleBandFraction);
             PlayerPrefs.Save();
         }
+        MarkBubbleDirty();   // both branches rewrite the bubble's title/body text
         Debug.Log($"[TigerSpeechBubble] Layout mode {(on ? "ON — drag to set the 2D/3D split" : "OFF")} " +
                   $"(split={bubbleBandFraction:P0}; restart for crisp rendering at the new split)");
     }
@@ -299,9 +300,18 @@ public class TigerSpeechBubble : MonoBehaviour
         m_BubbleL2D = l2dGO.AddComponent<DisplayXRLocal2D>();
         m_BubbleL2D.resolution = new Vector2Int(1024, 640);
         m_BubbleL2D.useExplicitRect = true; // we supply the exact panel-px rect
+        // Cap the overlay refresh (displayxr-unity#244). The bubble is a static
+        // panel of text — nothing animates in it — so the enabled offscreen camera
+        // and the provider's full-RT bridge copy are pure per-frame waste. 4 Hz caps
+        // the worst case for a content change we failed to announce at 250 ms while
+        // dropping ~93% of those renders at 60 fps. Content changes go through
+        // MarkBubbleDirty(); the component itself force-refreshes when the pixel rect
+        // moves, which covers the split drag and window resizes.
+        m_BubbleL2D.maxRefreshHz = 4f;
         BuildBubble(l2dGO.transform);
         m_BubbleL2DGO = l2dGO;
         l2dGO.SetActive(true);
+        MarkBubbleDirty();
 
         Debug.Log($"[TigerSpeechBubble] BUILD v11 (simple-window): client={m_PanelW}x{m_PanelH}; " +
                   $"bubbleBand={bubbleBandFraction:P0} (top); press B to toggle window decoration.");
@@ -382,6 +392,15 @@ public class TigerSpeechBubble : MonoBehaviour
             PushCanvasRect(zone.x, zone.y, zone.width, zone.height);
             m_LastZoneRect = zone;
         }
+    }
+
+    // The Local2D refresh is capped (see BuildUI), so every change to what the
+    // bubble canvas draws has to announce itself here — otherwise the new content
+    // sits invisible until the next permitted slot. The component consumes the flag
+    // in its LateUpdate, so a call from our Update lands on this same frame's render.
+    private void MarkBubbleDirty()
+    {
+        if (m_BubbleL2D != null) m_BubbleL2D.SetDirty();
     }
 
     // ------------------------------------------------------------ canvas rect ---

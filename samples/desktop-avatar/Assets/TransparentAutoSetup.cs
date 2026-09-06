@@ -93,6 +93,27 @@ public static class TransparentAutoSetup
 
         Renderer[] hit = hitList.Count > 0 ? hitList.ToArray() : null;
 
+        // Rear depth budget (XR_DXR_depth_budget v2): tell the runtime WHERE the
+        // content is, so it decides whether the avatar may show its back from the
+        // desktop BEHIND THE AVATAR rather than from the whole window. Without this
+        // an empty Notepad's own menu and status bars are enough horizontal structure
+        // to keep the clip shut while the tiger is in the opposite corner.
+        //
+        // The renderer list is pinned to exactly the silhouette targets above, so the
+        // measured region is the same geometry the click-through mask is cut from.
+        // One component only — native tracks a single region — so it goes on the
+        // first target root and covers the rest through the explicit list.
+        if (targetRoots.Count > 0 && hit != null)
+        {
+            var host = targetRoots[0];
+            var bounds = host.GetComponent<DisplayXRContentBounds>();
+            if (bounds == null) bounds = host.AddComponent<DisplayXRContentBounds>();
+            bounds.renderers = hit;
+            Debug.Log($"[TransparentAutoSetup] Content bounds reported from '{host.name}' " +
+                      $"({hit.Length} renderer(s)) — the rear depth budget is judged from " +
+                      "the desktop behind the content.");
+        }
+
         int installed = 0;
         foreach (var cam in Camera.allCameras)
         {

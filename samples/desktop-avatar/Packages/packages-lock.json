@@ -1,5 +1,15 @@
 {
   "dependencies": {
+    "com.displayxr.unity": {
+      "version": "https://github.com/DisplayXR/displayxr-unity.git#upm/v2.19.0",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.unity.xr.management": "4.4.0",
+        "com.unity.inputsystem": "1.4.4"
+      },
+      "hash": "08ec4412cebbbc08397a6aaf543ba4a7dd802d99"
+    },
     "com.unity.burst": {
       "version": "1.8.28",
       "depth": 2,

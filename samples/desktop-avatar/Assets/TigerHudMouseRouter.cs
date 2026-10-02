@@ -235,11 +235,6 @@ public class TigerHudMouseRouter : MonoBehaviour
 
     private bool TryGetWindowMouseFractional(out Vector2 frac)
     {
-        if (Screen.width <= 0 || Screen.height <= 0)
-        {
-            frac = Vector2.zero;
-            return false;
-        }
         // Prefer the overlay's synchronous native poll — Unity parks its
         // main HWND off-screen in transparent mode and the New InputSystem
         // independently polls system mouse on that cloaked HWND, producing
@@ -252,18 +247,34 @@ public class TigerHudMouseRouter : MonoBehaviour
         // and has no other source.
         if (m_Overlay != null)
         {
+            // PointerPosition is in client pixels of the window the runtime
+            // composites into, so normalise by THAT window's size, not
+            // Screen.*: in a transparent-overlay app on Windows Screen.* is
+            // Unity's own cloaked window, which can have any size (seen at
+            // 512x728 and 3872x2248 next to an 808x1280 overlay), and the HUD
+            // sliders stopped responding (DisplayXR/displayxr-unity#291).
+            if (!DisplayXRWindowSpaceUI.TryGetWindowPixelSize(out float ww, out float wh))
+            {
+                ww = Screen.width; wh = Screen.height;
+            }
             Vector2 pp = m_Overlay.PointerPosition;
-            if (pp.x < 0 || pp.x >= Screen.width || pp.y < 0 || pp.y >= Screen.height)
+            if (ww <= 0f || wh <= 0f || pp.x < 0 || pp.x >= ww || pp.y < 0 || pp.y >= wh)
             {
                 frac = Vector2.zero;
                 return false;
             }
             // PointerPosition is already top-left origin — no Y inversion.
-            frac = new Vector2(pp.x / Screen.width, pp.y / Screen.height);
+            frac = new Vector2(pp.x / ww, pp.y / wh);
             return true;
         }
         // Fallback for non-transparent builds: Mouse.current (bottom-left
-        // origin, flip Y to top-left fractional).
+        // origin, flip Y to top-left fractional). Here Screen.* IS the
+        // composited window.
+        if (Screen.width <= 0 || Screen.height <= 0)
+        {
+            frac = Vector2.zero;
+            return false;
+        }
         var mouse = Mouse.current;
         if (mouse == null)
         {

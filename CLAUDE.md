@@ -73,6 +73,27 @@ variant — keep it in sync with `productName` if you rename (the installer
 builder reads `productName` directly and needs no such edit). All `.bat` are
 CRLF-pinned via `.gitattributes` (LF breaks cmd.exe if/goto parsing).
 
+### Android (urp-singlepass-ui only, so far)
+
+`samples/urp-singlepass-ui` also builds an arm64 Vulkan/IL2CPP APK from any
+editor host: `Unity -batchmode -quit -buildTarget Android -projectPath
+samples/urp-singlepass-ui -executeMethod DisplayXRAndroidBuild.Build
+-dxrVersion X.Y.Z -logFile <outside the repo>` → `Builds/Android/<productName>.apk`
+(Unity debug key). Application id `com.displayxr.samples.urp_singlepass_ui` is
+**frozen** — the release key binds updates to it.
+- **No `com.unity.xr.openxr` in a sample that builds for Android.** That
+  package's build preprocessor strips every native plugin whose path contains
+  `openxr_loader` unless Unity's own OpenXR loader is active — which silently
+  drops the DisplayXR plugin's `libopenxr_loader.so` from the APK. The plugin
+  does not need the package on any platform.
+- **Release signing:** re-sign with the SDK's `apksigner` (v2+v3,
+  `--ks-pass file:` — and pass that one file only once; apksigner reads
+  `--key-pass file:` of the same path as the *next line* and fails), output
+  `DisplayXR-Unity-URPSinglePassUI-<ver>-android-arm64.apk`. Keystore is held
+  privately; GitHub environment `android-samples-release` carries it for a
+  future CI job. Expected cert SHA-256 `dd26900e…7cb4`. Never commit keystore
+  paths/passwords into ProjectSettings.
+
 ## Releasing a sample
 
 There is **no Unity CI** (no license/runner), so releases are driven locally:

@@ -32,6 +32,32 @@ Built-in to URP** once to upgrade materials.
 2. `installer\build-installer.bat [VERSION]` → produces
    `installer\DisplayXR-Unity-URPSinglePassUI-Setup-<ver>.exe`.
 
+## Android (Vulkan, ARM64, IL2CPP)
+
+The same project also builds an Android APK for 3D tablets running the DisplayXR
+Android runtime. Touch drives the rig (one-finger drag = orbit, pinch = zoom,
+two-finger drag = pan, double tap = reset) and the window-space panel (tap /
+drag its controls). Desktop keyboard and mouse input is unchanged.
+
+```bash
+Unity -batchmode -quit -buildTarget Android -projectPath samples/urp-singlepass-ui \
+      -executeMethod DisplayXRAndroidBuild.Build -dxrVersion 2.4.0 -logFile /tmp/urp-android.log
+```
+
+`Assets/Editor/DisplayXRAndroidBuild.cs` writes only Android-tab settings
+(Vulkan, IL2CPP, ARM64, min SDK 29, DisplayXR loader on the Android XR tab) and
+builds `Builds/Android/DisplayXR-URP-SinglePass-UI.apk`, debug-signed by Unity.
+`-dxrVersion` sets versionName and versionCode (`X*10000+Y*100+Z`) for that build
+only. Application id: **`com.displayxr.samples.urp_singlepass_ui`** — stable, do
+not change it (the release key binds updates to it).
+
+**Release APK.** The release keystore is held privately (the GitHub environment
+`android-samples-release` carries it as secrets for a future CI job). Re-sign the
+Unity APK with the Android SDK's `apksigner` (v2+v3; pass passwords with
+`--ks-pass file:…`, never on the command line) and publish it as
+`DisplayXR-Unity-URPSinglePassUI-<ver>-android-arm64.apk`. A release-signed APK
+cannot update a debug-signed install of the same id: uninstall that first.
+
 ## Issues / License
 
 Plugin bugs → [displayxr-unity](https://github.com/DisplayXR/displayxr-unity/issues);

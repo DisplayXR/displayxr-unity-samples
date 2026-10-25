@@ -12,8 +12,8 @@
 //
 // This script bridges the two:
 //   1. Reads the cursor position from the runtime preview window (editor)
-//      or from Unity's Input.mousePosition (built apps), in fractional
-//      window-coords.
+//      or, in built apps, from the primary touch (Android) or the mouse, in
+//      fractional window-coords.
 //   2. Hit-tests against the wsui layer's fractional rect.
 //   3. Maps the hit point to canvas-pixel coords inside the OverlayTexture.
 //   4. Synthesizes PointerEventData with that canvas-pixel position and
@@ -123,9 +123,16 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
         // ScreenPointToRay's Y is inverted by the same flip — so a panelFracY
         // of 0 (top of layer) needs screenY = 0, and panelFracY of 1 (bottom)
         // needs screenY = resolution.y. No additional flip in the router.
+        // Map into the RT's ACTUAL size, not the authored `resolution`: with
+        // matchPanelAspect (the plug-in default) the RT width follows the live
+        // panel aspect, which differs from the authored one whenever the window
+        // (or, on a tablet, the orientation) changes shape. 1 canvas UI unit ==
+        // 1 RT pixel of that size.
+        Vector2Int rtSize = m_Wsui.OverlayResolution;
+        if (rtSize.x <= 0 || rtSize.y <= 0) rtSize = m_Wsui.resolution;
         var canvasPos = new Vector2(
-            panelFracX * m_Wsui.resolution.x,
-            panelFracY * m_Wsui.resolution.y);
+            panelFracX * rtSize.x,
+            panelFracY * rtSize.y);
 
         // ---- 4. Synthesize PointerEventData and dispatch ----
         m_PointerData.Reset();
@@ -199,7 +206,10 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
 
     private bool TryGetWindowMouseFractional(out Vector2 frac)
     {
-#if UNITY_EDITOR
+#if UNITY_EDITOR_WIN
+        // (The overlay pointer is a Windows export, so this arm is Windows-editor only;
+        // a macOS/Linux editor — e.g. one building the Android player — reads the
+        // Input System below.)
         // Provider editor Play Mode (#173): the woven output is a dedicated window,
         // not Unity's Game View, so Unity's Input System doesn't track the cursor
         // over it. Read the cursor from the overlay window (client px, top-left) and
@@ -218,6 +228,15 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
         frac = Vector2.zero;
         return false;
 #else
+        // Touch (Android): the primary touch is the pointer. Its position is in
+        // Unity's screen space (bottom-left origin), the same as Mouse.current,
+        // and Unity's view and the provider's weave surface cover the same window.
+        if (Screen.width > 0 && Screen.height > 0 && TryGetPrimaryTouch(out Vector2 tp, out bool _))
+        {
+            frac = new Vector2(tp.x / Screen.width, 1f - tp.y / Screen.height);
+            return frac.x >= 0f && frac.x <= 1f && frac.y >= 0f && frac.y <= 1f;
+        }
+
         // Built apps: the runtime composites into Unity's main window.
         // Read cursor via the new Input System (project's activeInputHandler
         // is 1 = Input System Package only, so legacy UnityEngine.Input
@@ -244,7 +263,7 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
 
     private bool IsLeftDown()
     {
-#if UNITY_EDITOR
+#if UNITY_EDITOR_WIN
         // Provider editor Play Mode (#173): button state comes from the overlay
         // window's native WndProc tracker (Unity's Input System doesn't see clicks
         // over the separate weave window).
@@ -255,9 +274,30 @@ public class DisplayXRWsuiMouseRouter : MonoBehaviour
         }
         catch (System.EntryPointNotFoundException) { return false; }
 #else
+        if (TryGetPrimaryTouch(out Vector2 _, out bool touchDown))
+            return touchDown;
         var mouse = Mouse.current;
         return mouse != null && mouse.leftButton.isPressed;
 #endif
+    }
+
+    // Touch (Android tablets, displayxr-unity#418): finger down = left button down,
+    // and its position the cursor. Returns false when there is no touchscreen or no
+    // touch in progress, so mouse input on desktop is untouched. A finger that lifted
+    // this frame still reports its last position (press released), so the release
+    // lands on the control that was pressed. A tap whose down AND up both fall between
+    // two Updates is invisible to this polling — a real finger tap lasts ~80+ ms and is
+    // seen, but an instant `adb shell input tap` is not: use `input swipe x y x y 120`.
+    private static bool TryGetPrimaryTouch(out Vector2 pos, out bool down)
+    {
+        pos = Vector2.zero; down = false;
+        var ts = Touchscreen.current;
+        if (ts == null) return false;
+        var t = ts.primaryTouch;
+        if (t.phase.ReadValue() == UnityEngine.InputSystem.TouchPhase.None) return false;
+        pos = t.position.ReadValue();
+        down = t.press.isPressed;
+        return true;
     }
 
     private void ReleaseIfDown()

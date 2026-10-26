@@ -28,6 +28,11 @@ public class DragRotateCube : MonoBehaviour
     public Key resetKey = Key.Space;
 
     private bool m_Dragging;
+
+    /// <summary>True while a left-drag on the target is rotating it. Other scripts that
+    /// also write this transform's rotation (TigerFaceViewer's billboard) yield to it.</summary>
+    public bool IsDragging => m_Dragging;
+
     private Animator m_Animator;
     private bool m_AnimatorWasEnabled;
     private DisplayXRTransparentOverlay m_BoundOverlay;

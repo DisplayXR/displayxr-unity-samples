@@ -29,7 +29,10 @@
 // A/B is the point of the probe for issue #236.
 //
 // Auto-installs via RuntimeInitializeOnLoadMethod (the KooimaProbe pattern), so
-// it needs no scene edit. Off by default — press F.
+// it needs no scene edit. ON by default (startEnabled) — press F to turn it off.
+// A left-drag on the tiger (DragRotateCube) takes over while it lasts, and the
+// orientation it leaves becomes the billboard's new base; Space (DragRotateCube's
+// reset key) brings back the authored orientation.
 //
 // Not ported from the reference: the zone-canvas rebase (it offsets hx by the
 // window's centre on the panel for off-centre windows). Without it the heading is
@@ -73,6 +76,9 @@ public class TigerFaceViewer : MonoBehaviour
     public float logInterval = 1f;
 
     private Transform m_Tiger;
+    private DragRotateCube m_Drag;           // the tiger's left-drag rotate, which wins while it lasts
+    private bool m_WasDragging;
+    private Quaternion m_AuthoredRotation;   // m_BaseRotation at enable, for the reset key
     private Quaternion m_BaseRotation;
     private bool m_Enabled;
     private float m_Timer;
@@ -143,6 +149,9 @@ public class TigerFaceViewer : MonoBehaviour
         }
 
         m_BaseRotation = m_Tiger.rotation;
+        m_AuthoredRotation = m_BaseRotation;
+        m_Drag = m_Tiger.GetComponent<DragRotateCube>();
+        m_WasDragging = false;
         m_Yaw = 0f;
         m_Enabled = true;
         m_Timer = logInterval; // log immediately
@@ -157,9 +166,29 @@ public class TigerFaceViewer : MonoBehaviour
 
     void LateUpdate()
     {
-        // LateUpdate so we win over the Animator (which runs earlier in the frame)
-        // and over DragRotateCube's drag rotation while this mode is on.
+        // LateUpdate so we win over the Animator (which runs earlier in the frame).
         if (!m_Enabled || m_Tiger == null) return;
+
+        // ...but NOT over a left-drag. Writing the rotation every frame used to
+        // discard DragRotateCube's Rotate() each frame, so with the billboard on (the
+        // default) left-drag rotate logged "drag started" and did nothing. While the
+        // drag lasts it owns the rotation; when it ends, the orientation the user left
+        // becomes the new base (minus the yaw we are currently applying, so there is
+        // no jump: AngleAxis(yaw) * AngleAxis(-yaw) * R == R). Both rotations are
+        // about world up, so they compose in either order.
+        if (m_Drag != null && m_Drag.IsDragging) { m_WasDragging = true; return; }
+        if (m_WasDragging)
+        {
+            m_WasDragging = false;
+            m_BaseRotation = Quaternion.AngleAxis(-m_Yaw, Vector3.up) * m_Tiger.rotation;
+        }
+        // DragRotateCube's reset key restores the authored orientation; follow it
+        // (otherwise the next write would put the dragged base straight back).
+        var kb = Keyboard.current;
+        if (m_Drag != null && kb != null && m_Drag.resetKey != Key.None &&
+            kb[m_Drag.resetKey].wasPressedThisFrame)
+            m_BaseRotation = m_AuthoredRotation;
+
         if (!TryGetRawHead(out float hx, out float _, out float hz, out bool tracked)) return;
 
         // Reference math, 1:1: yaw from the head's lateral offset over its

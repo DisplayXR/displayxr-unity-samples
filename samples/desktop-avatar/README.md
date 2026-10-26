@@ -18,7 +18,7 @@ see-through desktop avatar (cartoon tiger) rendered over the live screen on
 | Key / input | Effect |
 |-------------|--------|
 | **F** | Turn the head-tracked billboard **off** (it is on at startup) and restore the tiger's rotation |
-| **Left-drag** on the tiger | Rotate it by hand |
+| **Left-drag** on the tiger | Rotate it by hand (also with the billboard on: the drag wins while it lasts and the new facing is kept) |
 | **Right-drag** | Move the application window |
 | **Scroll** | Zoom (display rig's virtual display height) |
 | **W / S** | Push the tiger in / out of the display plane |

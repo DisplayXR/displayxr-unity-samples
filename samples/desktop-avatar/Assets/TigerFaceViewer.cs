@@ -78,7 +78,6 @@ public class TigerFaceViewer : MonoBehaviour
     private Transform m_Tiger;
     private DragRotateCube m_Drag;           // the tiger's left-drag rotate, which wins while it lasts
     private bool m_WasDragging;
-    private Quaternion m_AuthoredRotation;   // m_BaseRotation at enable, for the reset key
     private Quaternion m_BaseRotation;
     private bool m_Enabled;
     private float m_Timer;
@@ -136,7 +135,18 @@ public class TigerFaceViewer : MonoBehaviour
         if (m_Enabled)
         {
             m_Enabled = false;
-            if (m_Tiger != null) m_Tiger.rotation = m_BaseRotation;
+            if (m_Tiger != null)
+            {
+                // Refresh the base from the CURRENT pose before restoring it. Mid-drag (and on the
+                // frame a drag ends) the tiger shows the user's rotation, which m_BaseRotation has
+                // not absorbed yet, so restoring the stale base snapped it back to the pre-drag
+                // pose. Taking the billboard's yaw off the current pose is right either way: while
+                // the billboard writes, current = AngleAxis(yaw) * base; during a drag, current is
+                // the user's pose, which started from that same AngleAxis(yaw) * base.
+                m_BaseRotation = Quaternion.AngleAxis(-m_Yaw, Vector3.up) * m_Tiger.rotation;
+                m_Tiger.rotation = m_BaseRotation;
+            }
+            m_WasDragging = false;
             Debug.Log("[TigerFaceViewer] OFF (rotation restored)");
             return;
         }
@@ -148,8 +158,10 @@ public class TigerFaceViewer : MonoBehaviour
             return;
         }
 
+        // The base is the tiger's CURRENT pose (an earlier drag is kept). The authored pose for the
+        // reset key is NOT taken here: after drag -> F off -> F on it would be the dragged pose and
+        // Space would appear to do nothing. It is DragRotateCube.InitialRotation, captured once.
         m_BaseRotation = m_Tiger.rotation;
-        m_AuthoredRotation = m_BaseRotation;
         m_Drag = m_Tiger.GetComponent<DragRotateCube>();
         m_WasDragging = false;
         m_Yaw = 0f;
@@ -166,7 +178,11 @@ public class TigerFaceViewer : MonoBehaviour
 
     void LateUpdate()
     {
-        // LateUpdate so we win over the Animator (which runs earlier in the frame).
+        // LateUpdate: after DragRotateCube (Update) and the Animator. The Animator never writes
+        // this root: the tiger FBX has two top-level nodes (the mesh and mixamorig:Hips), so
+        // Unity's root is a synthetic node without curves, every animated node is a mixamorig
+        // bone, applyRootMotion is off and there is no root-motion node. Re-enabling it after a
+        // drag therefore restarts the clip (keepAnimatorStateOnDisable is off) but keeps the yaw.
         if (!m_Enabled || m_Tiger == null) return;
 
         // ...but NOT over a left-drag. Writing the rotation every frame used to
@@ -182,12 +198,13 @@ public class TigerFaceViewer : MonoBehaviour
             m_WasDragging = false;
             m_BaseRotation = Quaternion.AngleAxis(-m_Yaw, Vector3.up) * m_Tiger.rotation;
         }
-        // DragRotateCube's reset key restores the authored orientation; follow it
-        // (otherwise the next write would put the dragged base straight back).
+        // DragRotateCube's reset key restores the authored orientation (its InitialRotation,
+        // captured once at Awake); follow it, otherwise the next write would put the dragged
+        // base straight back.
         var kb = Keyboard.current;
         if (m_Drag != null && kb != null && m_Drag.resetKey != Key.None &&
             kb[m_Drag.resetKey].wasPressedThisFrame)
-            m_BaseRotation = m_AuthoredRotation;
+            m_BaseRotation = m_Drag.InitialRotation;
 
         if (!TryGetRawHead(out float hx, out float _, out float hz, out bool tracked)) return;
 

@@ -38,6 +38,10 @@ public class DragRotateCube : MonoBehaviour
     private DisplayXRTransparentOverlay m_BoundOverlay;
     private Quaternion m_InitialRotation;
 
+    /// <summary>The orientation the reset key restores: the target's rotation at Awake, captured
+    /// once. TigerFaceViewer's billboard uses it as its authored base for the same key.</summary>
+    public Quaternion InitialRotation => m_InitialRotation;
+
     void Awake()
     {
         m_InitialRotation = transform.rotation;

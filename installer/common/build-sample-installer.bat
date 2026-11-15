@@ -58,8 +58,10 @@ if "%STUB%"=="" (
     exit /b 1
 )
 
-REM Version: arg2 or VERSION env, default 1.0.0. Split into MAJOR.MINOR.PATCH.
-if "%VERSION%"=="" set "VERSION=%~2"
+REM Version: arg2, else VERSION env, else 1.0.0. Split into MAJOR.MINOR.PATCH.
+REM The explicit argument wins: an inherited VERSION (a release shell, a
+REM script without setlocal) must not silently re-stamp the installer.
+if not "%~2"=="" set "VERSION=%~2"
 if "%VERSION%"=="" set "VERSION=1.0.0"
 for /f "tokens=1,2,3 delims=." %%a in ("%VERSION%") do (
     set "VMAJOR=%%a"

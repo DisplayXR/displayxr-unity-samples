@@ -76,3 +76,6 @@ displayxr.log.meta
 # Built anywhere: per-sample installer/ dirs and any aggregated dist/.
 **/installer/*.exe
 /dist/
+
+# Local Unity batch-mode build logs (machine-local paths; never commit)
+_build_*.log
